@@ -376,7 +376,12 @@ if ($Finish) {
         Invoke-Checked 'npm' @('ci', '--no-audit', '--no-fund')
         Invoke-Checked 'npx' @('vue-tsc', '--noEmit')
         Invoke-Checked 'npx' @('vite', 'build')
-        if ($CargoCheck) { Invoke-Checked 'cargo' @('check', '--manifest-path', 'src-tauri/Cargo.toml') }
+        if ($CargoCheck) {
+            Invoke-Checked 'cargo' @('check', '--manifest-path', 'src-tauri/Cargo.toml')
+            # cargo rewrites Cargo.lock (e.g. re-adds the header the original project removed);
+            # the release must keep the original project's file.
+            Invoke-Git checkout -- src-tauri/Cargo.lock
+        }
         if (& git status --porcelain) { throw 'The checks changed tracked files; review them before publishing.' }
     }
 
