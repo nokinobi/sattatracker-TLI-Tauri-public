@@ -1,17 +1,17 @@
-# Claude reviews every pull request into 'stable'.
+# Claude reviews every pull request into a release branch (release/x.y.z) and into 'stable'.
 #   verdict  - one Claude run: posts an inline comment on the exact line of each problem,
 #              then returns { blocking, summary, checked }. Fails when blocking. Make
 #              "claude-verdict" a required status check on 'stable' (docs/fork/RELEASING.md).
-#   decision - no blocking issues: approves with a short note (why, and what was checked),
-#              then merges. release/* PRs are only approved and labelled ready-to-promote,
-#              because a release replaces stable.
+#   decision - no blocking issues: approves with a short note (why, and what was checked).
+#              Feature and fix PRs into a release branch are then merged; a release PR
+#              (release/x.y.z -> stable) is labelled ready-to-promote instead, because a release replaces stable.
 #              Blocking issues: requests changes and labels the PR waiting-for-author.
 # Billed to the Claude subscription behind the CLAUDE_CODE_OAUTH_TOKEN secret.
 name: Claude Code Review
 
 on:
   pull_request:
-    branches: [stable]
+    branches: [stable, 'release/**']
     types: [opened, synchronize, ready_for_review, reopened]
 
 concurrency:
@@ -40,7 +40,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             You review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }},
-            which would bring changes into the 'stable' branch (the fork's released version).
+            which would bring changes into the '${{ github.base_ref }}' branch (the fork's released versions).
             See the changes with `git diff origin/${{ github.base_ref }}...HEAD` and read any files you need.
 
             1. For every problem you find, post ONE inline comment on the exact line with
