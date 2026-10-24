@@ -49,6 +49,36 @@ The last command installs the Conventional Commits check for every branch of tha
 
 Windows blocks `.ps1` scripts by default. If `.\scripts\release.ps1` is refused, run it as `powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1` (same parameters). The script opens pull requests with the GitHub CLI (`gh`) when it is installed, otherwise it prints the link.
 
+## Changing a feature or the release setup
+
+`feature/<name>` and `fork/release-config` are long-lived branches. Change them through short-lived branches and pull requests, which Claude reviews like any other:
+
+| Change | Short-lived branch | Pull request into |
+| --- | --- | --- |
+| Release tooling, workflows, release docs | `fix/...`, `ci/...`, `docs/...`, `chore/...` | `fork/release-config` |
+| A feature | `fix/...`, `refactor/...`, `perf/...`, `docs/...` | `feature/<name>` |
+
+```
+git checkout fork/release-config
+git pull
+git checkout -b fix/<topic>
+# commit, one Conventional Commit per change
+git push -u origin fix/<topic>
+gh pr create --repo nokinobi/sattatracker-TLI-Tauri-public --base fork/release-config --head fix/<topic>
+```
+
+- **Prefix the branch with the change type**, matching the commit types. Never start it with `feature/`: the release script recognises features by "Merge pull request ... from .../feature/<name>", so a `feature/...` branch merged into a feature would be listed as a feature of its own.
+- **Several fixes:**
+  - related fixes: one branch, one commit each. Pushing more commits updates the open pull request, and the review runs again.
+  - independent fixes: one branch and pull request each.
+- **Merged branches are done.** Don't reuse them; start a new branch from the current long-lived branch. Turn on *Settings > General > Automatically delete head branches* so GitHub removes them after merging.
+- **The long-lived branch moved meanwhile:** update the pull request with GitHub's *Update branch* button, or rebase on it.
+- **How changes reach users:**
+  - a feature change ships with the next release that adds that feature (`-AddFeature`);
+  - a `fork/release-config` change is part of every release from the next `-Start` on.
+  - A change to `claude-code-review.yml` must also go into `stable` right away, see [Limits](#claude-review).
+- **Every change is reviewed twice:** once in its own pull request, and again inside the whole feature when it is added to a release.
+
 ## Commit messages
 
 All commits use [Conventional Commits](https://www.conventionalcommits.org/):
@@ -137,11 +167,11 @@ A fix to a ready version `x.0.z` must not pick up work in progress for the next 
 
 ## Claude review
 
-Every pull request into a release branch or into `stable` is reviewed by Claude (`.github/workflows/claude-code-review.yml`). It runs on the Claude subscription behind the `CLAUDE_CODE_OAUTH_TOKEN` repository secret, not on API billing.
+Every pull request into `stable`, a release branch, `fork/*` or `feature/*` is reviewed by Claude (`.github/workflows/claude-code-review.yml`). It runs on the Claude subscription behind the `CLAUDE_CODE_OAUTH_TOKEN` repository secret, not on API billing.
 
 - **`claude-verdict`** is one Claude run. It posts an **inline comment on the exact line** of each problem, marked **Blocking** (real defects: bugs, build or type errors, security, data loss, broken release tooling) or **Suggestion** (at most 3, no pure style). Then it returns the verdict, a one-line summary, and a short list of what it checked. It fails when anything is blocking.
 - **`claude-decision`** acts on the verdict:
-  - **No blocking issues:** approves with a short note (why it passed, and a "Checked:" list) and removes `waiting-for-author`. Feature and fix pull requests into a release branch are then **merged**. The release pull request (`release/<x.y.z> -> stable`) is labelled `ready-to-promote` instead.
+  - **No blocking issues:** approves with a short note (why it passed, and a "Checked:" list) and removes `waiting-for-author`. Other pull requests (features into a release, fixes into `fork/*` or `feature/*`) are then **merged**. The release pull request (`release/<x.y.z> -> stable`) is labelled `ready-to-promote` instead.
   - **Blocking issues:** requests changes with the summary (details are in the inline comments) and labels the pull request `waiting-for-author`.
 - All of it runs again on every push to the pull request, so pushing fixes leads to an automatic approval (and merge) once they pass.
 - **`commit-lint`** checks the commit messages of the same pull requests.

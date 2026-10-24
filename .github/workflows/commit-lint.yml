@@ -1,11 +1,11 @@
-# Fails a pull request into 'stable' or a release branch that contains a commit whose message
+# Fails a pull request into 'stable', a release branch, fork/* or feature/* that contains a commit whose message
 # doesn't follow Conventional Commits (docs/release/RELEASING.md, "Commit messages").
 # Merge commits and commits authored before the rule was introduced are skipped.
 name: Commit lint
 
 on:
   pull_request:
-    branches: [stable, 'release/**']
+    branches: [stable, 'release/**', 'fork/**', 'feature/**']
     types: [opened, synchronize, reopened]
 
 jobs:
