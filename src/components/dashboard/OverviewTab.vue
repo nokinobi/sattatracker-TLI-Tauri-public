@@ -220,7 +220,7 @@ const spent = computed(() => Math.max(0, dropped.value - store.totalProfit));
 .ov-totals b { display: block; font-size: 16px; }
 .ov-sep { height: 1px; background: var(--line); }
 .ov-list { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
-.ov-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.ov-item { flex-shrink: 0; display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .ov-item img { width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; }
 .ov-item .name { flex: 1; min-width: 0; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ov-item .qty { font-size: 10px; color: var(--label); }

@@ -247,7 +247,7 @@ watch([group, type, query, minPrice, maxPrice, blockedFilter, sortBy], () => { l
 .pr-head, .pr-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 90px 70px; gap: 12px; align-items: center; }
 .pr-head { padding: 8px 30px 4px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--label); }
 .pr-list { flex: 1; min-height: 0; padding: 0 18px 14px; display: flex; flex-direction: column; gap: 4px; }
-.pr-row { padding: 5px 12px; border-radius: 9px; background: var(--panel); border: 1px solid var(--panel-border); font-size: 12px; }
+.pr-row { flex-shrink: 0; padding: 5px 12px; border-radius: 9px; background: var(--panel); border: 1px solid var(--panel-border); font-size: 12px; }
 .pr-row.owned { border-color: var(--accent-border); }
 .pr-row.blocked { opacity: 0.55; }
 .pr-row .name { min-width: 0; display: flex; flex-direction: column; font-weight: 600; color: var(--strong); }

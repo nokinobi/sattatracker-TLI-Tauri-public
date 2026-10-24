@@ -139,7 +139,7 @@ function toggleBlock(id: string, blocked: boolean) {
 .inv-head, .inv-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 140px 74px 74px 90px 64px; gap: 12px; align-items: center; }
 .inv-head { padding: 8px 30px 4px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--label); }
 .inv-list { flex: 1; min-height: 0; padding: 0 18px 14px; display: flex; flex-direction: column; gap: 4px; }
-.inv-row { padding: 6px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--panel-border); font-size: 12px; }
+.inv-row { flex-shrink: 0; padding: 6px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--panel-border); font-size: 12px; }
 .inv-row.blocked { opacity: 0.55; }
 .inv-row .name { min-width: 0; display: flex; flex-direction: column; font-weight: 600; color: var(--strong); }
 .inv-row .name span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

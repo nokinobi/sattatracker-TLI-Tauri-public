@@ -345,7 +345,7 @@ function onChartMove(e: MouseEvent) {
 
 .ss-maps { flex: 1; min-height: 0; display: flex; }
 .ss-list { width: 320px; flex-shrink: 0; padding: 10px; display: flex; flex-direction: column; gap: 4px; border-right: 1px solid var(--line); }
-.ss-row { display: flex; align-items: stretch; border-radius: 10px; overflow: hidden; cursor: pointer; text-align: left; padding: 0; background: var(--panel); border: 1px solid var(--panel-border); color: inherit; }
+.ss-row { flex-shrink: 0; display: flex; align-items: stretch; border-radius: 10px; overflow: hidden; cursor: pointer; text-align: left; padding: 0; background: var(--panel); border: 1px solid var(--panel-border); color: inherit; }
 .ss-row.on { background: var(--accent-bg); border-color: var(--accent-border); }
 .ss-row .stripe { width: 3px; flex-shrink: 0; }
 .ss-row .stripe.up { background: var(--pos); }
@@ -382,7 +382,7 @@ function onChartMove(e: MouseEvent) {
 .ss-loot-head, .ss-loot-line { display: grid; grid-template-columns: 30px minmax(0, 1fr) 160px 90px; gap: 12px; align-items: center; }
 .ss-loot-head { padding: 8px 30px 4px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--label); }
 .ss-loot-list { flex: 1; min-height: 0; padding: 0 18px 14px; display: flex; flex-direction: column; gap: 4px; }
-.ss-loot-line { padding: 6px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--panel-border); }
+.ss-loot-line { flex-shrink: 0; padding: 6px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--panel-border); }
 .ss-loot-line .bar { display: flex; align-items: center; gap: 8px; }
 .ss-loot-line .bar > span { flex: 1; height: 6px; border-radius: 3px; background: var(--chip-border); overflow: hidden; }
 .ss-loot-line .bar i { display: block; height: 100%; background: var(--gold); }
