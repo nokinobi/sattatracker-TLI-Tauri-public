@@ -1,0 +1,42 @@
+# Fails a pull request into 'stable' or a release branch that contains a commit whose message
+# doesn't follow Conventional Commits (docs/release/RELEASING.md, "Commit messages").
+# Merge commits and commits authored before the rule was introduced are skipped.
+name: Commit lint
+
+on:
+  pull_request:
+    branches: [stable, 'release/**']
+    types: [opened, synchronize, reopened]
+
+jobs:
+  commit-lint:
+    name: commit-lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      RULE_SINCE: '2026-10-24T15:05:00+03:00'
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Check commit messages
+        run: |
+          pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: [^ ].*'
+          since=$(date -d "$RULE_SINCE" +%s)
+          bad=0
+          while IFS=$'\t' read -r sha authored subject; do
+            [ "$authored" -lt "$since" ] && continue
+            if ! printf '%s' "$subject" | grep -Eq "$pattern"; then
+              echo "::error::${sha:0:7} \"$subject\" does not follow Conventional Commits (type(scope): description)"
+              bad=1
+            fi
+          done < <(git log --no-merges --format='%H%x09%at%x09%s' "$BASE_SHA..$HEAD_SHA")
+          if [ "$bad" -eq 1 ]; then
+            echo "Rename these commits (e.g. git rebase -i, reword) and push again. See docs/release/RELEASING.md."
+            exit 1
+          fi
+          echo "All commit messages follow Conventional Commits."
