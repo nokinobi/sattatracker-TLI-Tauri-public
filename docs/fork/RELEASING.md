@@ -16,6 +16,37 @@ Versions are `x.y.z`, on the fork's own line, never the original project's numbe
 - `stable` only ever holds ready versions. `preview` holds the newest pre-major build.
 - GitHub's "latest release" skips pre-releases, so it always points at the newest ready version.
 
+## Commit messages
+
+All commits use [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+type(optional-scope): short description
+```
+
+| Type | Use for |
+| --- | --- |
+| `feat` | a new feature or user-visible ability |
+| `fix` | a bug fix |
+| `docs` | documentation only |
+| `style` | formatting, no code change |
+| `refactor` | code change that neither fixes a bug nor adds a feature |
+| `perf` | performance improvement |
+| `test` | tests |
+| `build` | build system, dependencies, versions |
+| `ci` | GitHub workflows |
+| `chore` | maintenance, including the release script's own commits (`chore(release): ...`) |
+| `revert` | reverting an earlier commit |
+
+- **Scope** is optional and names the area, e.g. `feat(compact-window): ...` or `fix(release): ...`.
+- **Breaking changes:** add `!` before the colon, e.g. `feat(settings)!: ...`.
+- **Description:** lowercase, imperative ("add", not "added"), no period at the end.
+- Merge commits are exempt.
+
+Two checks enforce it. A local `commit-msg` hook in `.git/hooks/` rejects a non-conforming message when you commit; see [Setup on a new clone](#setup-on-a-new-clone). The `commit-lint` workflow fails pull requests into `stable` or `preview` that contain one. Commits written before the rule (24 October 2026) are left as they are.
+
+The commit subjects become the release notes, so a good description pays off twice.
+
 ## Quick reference
 
 | Goal | Command |
@@ -40,6 +71,19 @@ The version and the features come from `fork/release.json` on this branch.
 | `preview` | Latest **pre-major** build | Never commit to it. `-Promote` force-moves it to each new pre-major release. |
 
 Remotes in the local clone: `origin` is this fork (nokinobi), `upstream` is the original project (sattatrapy).
+
+### Setup on a new clone
+
+```
+git clone https://github.com/nokinobi/sattatracker-TLI-Tauri-public.git
+cd sattatracker-TLI-Tauri-public
+git remote add upstream https://github.com/sattatrapy/sattatracker-TLI-Tauri-public.git
+git fetch upstream
+git config rerere.enabled true
+cmd /c "git show origin/fork/release-config:scripts/commit-msg > .git\hooks\commit-msg"
+```
+
+The last command installs the Conventional Commits check for every branch of that clone. It goes through `cmd` because PowerShell's `>` would save the file in an encoding Git's shell can't run.
 
 Windows blocks `.ps1` scripts by default. If `.\scripts\release.ps1` is refused, run it as `powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1` (same parameters). `-Publish` opens pull requests with the GitHub CLI (`gh`) when it is on `PATH`, otherwise it prints the link.
 
@@ -116,7 +160,7 @@ git checkout -b release/1.0.1 v1.0.0
 git cherry-pick <fix commits>
 ```
 
-Then set the version to `1.0.1` in the five version files, add `docs/releases/release-1.0.1.md`, commit `Release v1.0.1`, push the branch, open a pull request into `stable`, and `-Promote 1.0.1` as usual. Also make sure the fix is on its feature branch, so later releases keep it. The script warns when you ask it to build a ready fix.
+Then set the version to `1.0.1` in the five version files, add `docs/releases/release-1.0.1.md`, commit `chore(release): v1.0.1`, push the branch, open a pull request into `stable`, and `-Promote 1.0.1` as usual. Also make sure the fix is on its feature branch, so later releases keep it. The script warns when you ask it to build a ready fix.
 
 ## Claude review
 

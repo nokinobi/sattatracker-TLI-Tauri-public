@@ -192,7 +192,7 @@ function New-ReleaseNotes([string]$Version, [string]$Tag, [string[]]$Included, [
         }
     }
 
-    $tooling = Get-CommitLines (@("main..$ConfigRef") + $since)
+    $tooling = @(Get-CommitLines (@("main..$ConfigRef") + $since) | Where-Object { $_ -notmatch '^- docs\(release\): add notes for ' })
     if ($tooling.Count) { $lines += '', '## Release tooling and docs', ''; $lines += $tooling }
 
     if ($previous) {
@@ -248,7 +248,7 @@ if ($Promote) {
     if ($check.conclusion -ne 'success') { throw "claude-verdict is '$($check.conclusion)' on $sha. Address the review first: $($check.html_url)" }
     Write-Host "claude-verdict passed on $sha" -ForegroundColor Green
 
-    $releaseCommit = (& git log --grep "^Release $tag$" --format=%H -1)
+    $releaseCommit = (& git log --grep "^chore(release): $tag$" --format=%H -1)
     if ($releaseCommit) {
         $fixes = & git log --format='  %h %s' "$($releaseCommit.Trim())..HEAD"
         if ($fixes) {
@@ -274,7 +274,7 @@ if ($Promote) {
             Invoke-Git checkout --quiet -b $ConfigBranch "$ForkRemote/$ConfigBranch"
         }
         Invoke-Git checkout $branch -- $notes
-        Invoke-Git commit --quiet -m "Add release notes for $tag"
+        Invoke-Git commit --quiet -m "docs(release): add notes for $tag"
         Invoke-Git push --quiet $ForkRemote $ConfigBranch
         Write-Host "Copied $notes to $ConfigBranch." -ForegroundColor Green
     }
@@ -333,7 +333,7 @@ function Merge-IntoRelease([string]$Name, [string]$Ref) {
     if (-not (Test-Git merge-base --is-ancestor main $Ref)) {
         Write-Host "  note  $Name is not rebased on the latest main" -ForegroundColor Yellow
     }
-    & git merge --no-ff --no-edit -m "Release ${tag}: add $Name" $Ref | Out-Host
+    & git merge --no-ff --no-edit -m "chore(release): add $Name to $tag" $Ref | Out-Host
     if ($LASTEXITCODE -ne 0) {
         & git merge --abort | Out-Host
         & git checkout --quiet main | Out-Host
@@ -362,7 +362,7 @@ Update-ReadmeFeatures $included
 New-ReleaseNotes $version $tag $included $configRef
 
 Invoke-Git add -A
-Invoke-Git commit --quiet -m "Release $tag" -m ("Features: " + ($(if ($included) { $included -join ', ' } else { 'none' })))
+Invoke-Git commit --quiet -m "chore(release): $tag" -m ("Features: " + ($(if ($included) { $included -join ', ' } else { 'none' })))
 Write-Host "Committed version $version" -ForegroundColor Green
 
 # --- Checks ------------------------------------------------------------------
