@@ -36,6 +36,29 @@ async fn find_season_id(log_path: &PathBuf) -> u32 {
     1601
 }
 
+async fn inventory_snapshot(
+    fsm: &GameStateMachine,
+    pricing: &PricingManager,
+) -> (Vec<crate::models::InventoryItem>, f64) {
+    let raw_items = fsm.bag.get_all_main_inventory_items();
+    let pages = fsm.bag.get_main_inventory_pages();
+    let mut total_value = 0.0f64;
+    let mut snapshot: Vec<crate::models::InventoryItem> = Vec::new();
+    for (item_id, qty) in &raw_items {
+        let price = pricing.get_price(item_id).await;
+        total_value += price * (*qty as f64);
+        snapshot.push(crate::models::InventoryItem {
+            item_id: item_id.clone(),
+            item_name: crate::db::DbManager::get_item_name(item_id),
+            item_type: crate::db::DbManager::get_item_type(item_id),
+            page_id: pages.get(item_id).copied().unwrap_or(0),
+            qty: *qty,
+            price,
+        });
+    }
+    (snapshot, total_value)
+}
+
 async fn count_lines(log_path: &PathBuf) -> u64 {
     let file = match tokio::fs::File::open(log_path).await {
         Ok(f) => f,
@@ -134,21 +157,8 @@ pub async fn start_tailing(
             () = &mut sort_timer, if sort_pending => {
                 sort_pending = false;
                 sort_timer.as_mut().reset(TokioInstant::now() + Duration::from_secs(u32::MAX as u64));
-                let raw_items = fsm.bag.get_all_main_inventory_items();
-                println!("[tailer] Sort debounce done, {} items in bag", raw_items.len());
-                let mut total_value = 0.0f64;
-                let mut snapshot: Vec<crate::models::InventoryItem> = Vec::new();
-                for (item_id, qty) in &raw_items {
-                    let price     = pricing.get_price(item_id).await;
-                    let item_name = crate::db::DbManager::get_item_name(item_id);
-                    total_value  += price * (*qty as f64);
-                    snapshot.push(crate::models::InventoryItem {
-                        item_id:   item_id.clone(),
-                        item_name,
-                        qty:       *qty,
-                        price,
-                    });
-                }
+                println!("[tailer] Sort debounce done, {} items in bag", fsm.bag.get_all_main_inventory_items().len());
+                let (snapshot, total_value) = inventory_snapshot(&fsm, &pricing).await;
                 println!("[tailer] Snapshot: total_value={:.2}", total_value);
                 let _ = app.emit("game_event", GameEvent::InventoryRefreshed { value: total_value, items: snapshot });
             }
@@ -163,21 +173,8 @@ pub async fn start_tailing(
                 let raw_line = line.line();
 
                 if raw_line.contains("ProtoName=ResetItemsLayout") && raw_line.contains(" start") {
-                    let raw_items = fsm.bag.get_all_main_inventory_items();
-                    if !raw_items.is_empty() {
-                        let mut total_value = 0.0f64;
-                        let mut snapshot: Vec<crate::models::InventoryItem> = Vec::new();
-                        for (item_id, qty) in &raw_items {
-                            let price     = pricing.get_price(item_id).await;
-                            let item_name = crate::db::DbManager::get_item_name(item_id);
-                            total_value  += price * (*qty as f64);
-                            snapshot.push(crate::models::InventoryItem {
-                                item_id:   item_id.clone(),
-                                item_name,
-                                qty:       *qty,
-                                price,
-                            });
-                        }
+                    if !fsm.bag.get_all_main_inventory_items().is_empty() {
+                        let (snapshot, total_value) = inventory_snapshot(&fsm, &pricing).await;
                         println!("[tailer] Pre-sort snapshot: {} items, {:.2} FE", snapshot.len(), total_value);
                         let _ = app.emit("game_event", GameEvent::InventoryRefreshed { value: total_value, items: snapshot });
                     }

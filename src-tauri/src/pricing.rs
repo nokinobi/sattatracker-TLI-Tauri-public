@@ -4,7 +4,7 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicI64, Ordering},
     Mutex,
 };
 
@@ -14,6 +14,11 @@ lazy_static! {
 }
 
 static FULL_PRICE_LOADED: AtomicBool = AtomicBool::new(false);
+static LAST_REFRESH_MS: AtomicI64 = AtomicI64::new(0);
+
+pub fn last_refresh_ms() -> i64 {
+    LAST_REFRESH_MS.load(Ordering::Relaxed)
+}
 
 pub fn get_all_cached_prices() -> Vec<(String, f64)> {
     let cache = PRICE_CACHE.lock().unwrap();
@@ -228,6 +233,11 @@ impl PricingManager {
                     *cache = table;
                 }
                 FULL_PRICE_LOADED.store(true, Ordering::Relaxed);
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(0);
+                LAST_REFRESH_MS.store(now_ms, Ordering::Relaxed);
                 self.save_disk_cache().await;
                 println!(
                     "[pricing] Price table refreshed from ETor ({} items) and saved to disk",
