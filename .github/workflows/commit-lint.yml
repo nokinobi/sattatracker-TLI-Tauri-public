@@ -1,5 +1,5 @@
 # Fails a pull request into 'stable' or a release branch that contains a commit whose message
-# doesn't follow Conventional Commits (docs/fork/RELEASING.md, "Commit messages").
+# doesn't follow Conventional Commits (docs/release/RELEASING.md, "Commit messages").
 # Merge commits and commits authored before the rule was introduced are skipped.
 name: Commit lint
 
@@ -36,7 +36,7 @@ jobs:
             fi
           done < <(git log --no-merges --format='%H%x09%at%x09%s' "$BASE_SHA..$HEAD_SHA")
           if [ "$bad" -eq 1 ]; then
-            echo "Rename these commits (e.g. git rebase -i, reword) and push again. See docs/fork/RELEASING.md."
+            echo "Rename these commits (e.g. git rebase -i, reword) and push again. See docs/release/RELEASING.md."
             exit 1
           fi
           echo "All commit messages follow Conventional Commits."

@@ -28,7 +28,7 @@ Versions are `x.y.z`, on the fork's own line, independent of the original projec
 | --- | --- | --- |
 | `main` | Exact copy of the original project's `main` | Never commit to it. Only sync it from `upstream`. Used as the base of every release. |
 | `feature/<name>` | One fork feature | Branch from `main`, keep it rebased on `main`. Its docs go in `docs/features/<name>.md` on the same branch. |
-| `fork/release-config` | Fork-wide files: this doc, the fork README (`.github/README.md`), `scripts/`, the workflows, and `docs/releases/` (all release notes) | Branched from `main`. Merged into every release when it starts. |
+| `fork/release-config` | Fork-wide files: this doc, the fork README (`.github/README.md`), `scripts/`, the workflows, and `docs/release/versions/` (all release notes) | Branched from `main`. Merged into every release when it starts. |
 | `release/<x.y.z>` | One release | Created by `-Start`. Changed only through reviewed pull requests until it is promoted, never after. |
 | `stable` | The latest released version; the fork's default branch on GitHub | Never commit to it. `-Promote` force-moves it to each new release. |
 
@@ -114,13 +114,13 @@ The commit subjects become the release notes, so a good description pays off twi
 4. **Promote.** The script refuses unless `claude-verdict` passed on the branch's latest commit. Then it:
    - tags `v<x.y.z>`, which starts `.github/workflows/release.yml`. The workflow builds the installers with the version taken from the tag, and creates the GitHub release with the release notes as its description and the pre-release flag set from the version (about 10 minutes);
    - moves `stable` to `release/<x.y.z>`, which also marks the release pull request as merged;
-   - copies the release notes to `fork/release-config`, so `docs/releases/` keeps the full history.
+   - copies the release notes to `fork/release-config`, so `docs/release/versions/` keeps the full history.
 
    Never press **Merge** on the release pull request: a release replaces `stable`, it is not merged into it. Merging would keep features you dropped.
 
 ## Release notes
 
-`-Finish` writes `docs/releases/release-<x.y.z>.md`, one file per release. Together they are the fork's release history.
+`-Finish` writes `docs/release/versions/<x.y.z>.md`, one file per release. Together they are the fork's release history.
 
 - version, type (ready or pre-major), date, the original project's commit it is based on, and the previous release;
 - the features included, with their one-line description from `docs/features/<name>.md`;

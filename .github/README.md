@@ -6,7 +6,7 @@ A fork of [sattatrapy/sattatracker-TLI-Tauri-public](https://github.com/sattatra
 
 Get the installer from the [releases](https://github.com/nokinobi/sattatracker-TLI-Tauri-public/releases). Use the `-setup.exe` (setup wizard) or the `.msi`. The installer is not code-signed, so Windows SmartScreen shows a warning, and the app asks for administrator rights when it starts.
 
-Releases marked **Pre-release** are development builds; the others are ready versions. Each release has notes in [`docs/releases/`](../docs/releases/), and the [release process](../docs/fork/RELEASING.md#versions) explains the version numbers.
+Releases marked **Pre-release** are development builds; the others are ready versions. Each release has notes in [`docs/release/versions/`](../docs/release/versions/), and the [release process](../docs/release/RELEASING.md#versions) explains the version numbers.
 
 This fork uses the original app ID, so installing it replaces the original tracker and keeps its settings.
 
@@ -20,7 +20,7 @@ Everything else, such as setup, hotkeys, prices and assets, works as described i
 
 ## For contributors
 
-- [How releases are built](../docs/fork/RELEASING.md): branches, picking features for a release, syncing with the original project.
+- [How releases are built](../docs/release/RELEASING.md): branches, picking features for a release, syncing with the original project.
 - Feature specs live in [`docs/features/`](../docs/features/) on each feature branch.
 
 ## Credits and license

@@ -21,11 +21,11 @@ jobs:
 
       - run: npm ci
 
-      # Fork release rules (docs/fork/RELEASING.md):
+      # Fork release rules (docs/release/RELEASING.md):
       # - the app version comes from the tag and is set at build time, so the original
       #   project's version files stay untouched;
       # - only vX.0.Z with X >= 1 is a normal release, everything else is a pre-release;
-      # - the release description is docs/releases/release-<version>.md.
+      # - the release description is docs/release/versions/<version>.md.
       - id: meta
         shell: bash
         run: |
@@ -41,7 +41,7 @@ jobs:
           fi
           printf '{ "version": "%s" }\n' "$version" > "$RUNNER_TEMP/tauri-version.json"
           echo "config=$RUNNER_TEMP/tauri-version.json" >> "$GITHUB_OUTPUT"
-          notes="docs/releases/release-$version.md"
+          notes="docs/release/versions/$version.md"
           {
             echo 'body<<RELEASE_NOTES_EOF'
             if [ -f "$notes" ]; then cat "$notes"; else echo "Release $GITHUB_REF_NAME"; fi

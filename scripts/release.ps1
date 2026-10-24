@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Fork release workflow. See docs/fork/RELEASING.md.
+    Fork release workflow. See docs/release/RELEASING.md.
 
     A release branch release/<version> starts from the original project's latest main
     (plus fork/release-config). Features join it through pull requests, which Claude reviews.
@@ -25,7 +25,7 @@
 
 .EXAMPLE
     .\scripts\release.ps1 -Finish
-    Writes docs/releases/release-<x.y.z>.md and the README feature list from the features
+    Writes docs/release/versions/<x.y.z>.md and the README feature list from the features
     merged into the release, runs the checks, pushes, and opens the pull request into 'stable'.
 
 .EXAMPLE
@@ -201,7 +201,7 @@ function Update-ReadmeFeatures([string[]]$Included) {
     [System.IO.File]::WriteAllText($readme, $text, $Utf8NoBom)
 }
 
-# Writes docs/releases/release-<version>.md from the features merged into the release.
+# Writes docs/release/versions/<version>.md from the features merged into the release.
 function New-ReleaseNotes([string]$Ver, $Features) {
     $previous = Get-PreviousReleaseTag $Ver
     $since = @()
@@ -253,8 +253,8 @@ function New-ReleaseNotes([string]$Ver, $Features) {
         }
     }
 
-    $path = "docs/releases/release-$Ver.md"
-    New-Item -ItemType Directory -Force -Path 'docs/releases' | Out-Null
+    $path = "docs/release/versions/$Ver.md"
+    New-Item -ItemType Directory -Force -Path 'docs/release/versions' | Out-Null
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $path), (($lines -join "`n") + "`n"), $Utf8NoBom)
     Write-Host "Wrote $path" -ForegroundColor Green
 }
@@ -374,7 +374,7 @@ if ($Finish) {
     if ($NoPush) { Write-Host 'Not pushed (-NoPush).'; return }
     Invoke-Git push --quiet $ForkRemote $branch
     $body = "$(Get-ReleaseKind $Version). Features: $featureList`n`n" +
-            "Release notes: ``docs/releases/release-$Version.md```n`n" +
+            "Release notes: ``docs/release/versions/$Version.md```n`n" +
             "Claude reviews this release. When the claude-verdict check passes, run " +
             "``.\scripts\release.ps1 -Promote $Version``. Do not press Merge: the release replaces stable, it is not merged into it."
     Open-PullRequest 'stable' $branch "Release $tag" $body
@@ -417,7 +417,7 @@ Invoke-Git push --force $ForkRemote "${branch}:refs/heads/stable"
 Write-Host "Tagged $tag (the GitHub workflow is building the installers) and moved stable to $branch." -ForegroundColor Green
 
 # Keep every release's notes on the config branch, so later releases carry the history.
-$notes = "docs/releases/release-$Version.md"
+$notes = "docs/release/versions/$Version.md"
 if (Test-Git cat-file -e "HEAD:$notes") {
     Switch-ToForkBranch $ConfigBranch
     Invoke-Git checkout $branch -- $notes
