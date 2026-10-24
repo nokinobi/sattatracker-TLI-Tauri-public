@@ -2,6 +2,18 @@
 
 Every release is rebuilt from scratch: the original project's latest `main`, plus the fork features picked for that release, plus this branch (`fork/release-config`). Nothing carries over from the previous release, so leaving a feature out of a release is just a matter of not listing it.
 
+## Quick reference
+
+| Goal | Command |
+| --- | --- |
+| Build the next release locally and check it | `.\scripts\release.ps1` |
+| Publish it for Claude's review (pull request into `stable`) | `.\scripts\release.ps1 -Publish` |
+| Release it after `claude-verdict` passed | `.\scripts\release.ps1 -Promote 2.1.0` |
+| Test build (GitHub pre-release, no review) | `.\scripts\release.ps1 -PreRelease 1 -Publish` |
+| Also compile the Rust side while checking | add `-CargoCheck` |
+
+The version and the features come from `fork/release.json` on this branch.
+
 ## Branches
 
 | Branch | What it is | Rules |
