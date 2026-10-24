@@ -168,7 +168,7 @@ foreach ($feature in $config.features) {
     if ($feature -notmatch '^feature/') { throw "fork/release.json: '$feature' is not a feature branch (names must start with feature/)." }
 }
 $duplicates = @($config.features | Group-Object | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
-if (-not $duplicates) { throw "fork/release.json lists these features more than once: $($duplicates -join ', ')" }
+if ($duplicates) { throw "fork/release.json lists these features more than once: $($duplicates -join ', ')" }
 
 $version = $config.version
 $tag = "v$version"
