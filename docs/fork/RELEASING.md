@@ -76,6 +76,7 @@ Either way, carry real fixes back to the feature branch (step 6 above).
 - Bypass list: *Repository admin*, set to *Always allow*. The release script's force-move of `stable` needs this.
 
 **Limits:**
+- **The review only runs if `claude-code-review.yml` in the pull request matches the copy on `stable`** (the default branch). A pull request that changes the workflow itself is therefore never reviewed: Claude skips it and `claude-verdict` fails with "no verdict". Merge such a change into `stable` on its own first, using your ruleset bypass, then build the release. Release branches carry the workflow from `fork/release-config`, so keep `stable` and `fork/release-config` in step.
 - Pull requests from forks of this fork get no secrets, so their review can't run and the required check blocks them.
 - The token from `claude setup-token` expires after one year. Create a new one and update the secret.
 
