@@ -8,7 +8,7 @@ Every release is rebuilt from scratch: the original project's latest `main`, plu
 | --- | --- |
 | Build the next release locally and check it | `.\scripts\release.ps1` |
 | Publish it for Claude's review (pull request into `stable`) | `.\scripts\release.ps1 -Publish` |
-| Release it after `claude-verdict` passed | `.\scripts\release.ps1 -Promote 2.1.0` |
+| Release it after `claude-verdict` passed | `.\scripts\release.ps1 -Promote 0.2.0` |
 | Test build (GitHub pre-release, no review) | `.\scripts\release.ps1 -PreRelease 1 -Publish` |
 | Also compile the Rust side while checking | add `-CargoCheck` |
 
@@ -21,7 +21,7 @@ The version and the features come from `fork/release.json` on this branch.
 | `main` | Exact copy of the original project's `main` | Never commit to it. Only sync it from `upstream`. |
 | `feature/<name>` | One fork feature, e.g. `feature/compact-window` | Branch from `main`, keep it rebased on `main`. Its docs go in `docs/features/<name>.md` on the same branch. |
 | `fork/release-config` | Fork-wide files: this doc, the fork README (`.github/README.md`), `fork/release.json`, `scripts/release.ps1`, the Claude review workflows, the pre-release workflow tweak | Branched from `main`. Included in every release. |
-| `release/<version>` | One per published version, e.g. `release/2.0.0` | Created by the script. Never changed afterwards, so every release stays reproducible. |
+| `release/<version>` | One per published version, e.g. `release/0.0.1` | Created by the script. Never changed afterwards, so every release stays reproducible. |
 | `stable` | Points to the latest release; the fork's default branch on GitHub | Never commit to it. The script force-moves it to each new release. |
 
 Remotes in the local clone: `origin` is this fork (nokinobi), `upstream` is the original project (sattatrapy).
@@ -40,15 +40,15 @@ Windows blocks `.ps1` scripts by default. If `.\scripts\release.ps1` is refused,
    `rerere` is enabled in this clone, so a conflict fixed once is fixed automatically the next time.
 3. **Pick features and version.** On `fork/release-config`, edit `fork/release.json` and commit it:
    ```json
-   { "version": "2.1.0", "features": ["feature/session-viewer"] }
+   { "version": "0.2.0", "features": ["feature/session-viewer"] }
    ```
-   Use your own version line (2.x and up), never the original project's numbers.
+   Use the fork's own version line, never the original project's numbers: `0.x.y` while developing, `1.0.0` for the first workable version (see [Decisions](#decisions-change-them-here-if-they-change)).
 4. **Build and check.** From a clean working tree:
    ```
    .\scripts\release.ps1
    ```
-   It creates `release/2.1.0` from `main`, merges each listed feature and `fork/release-config`, sets the version in all five version files, fills the feature list in `.github/README.md` from `docs/features/*.md`, commits, then runs `npm ci`, the type-check and the front-end build. Add `-CargoCheck` to also compile the Rust side. If a feature conflicts, the script stops, removes the half-built branch and names the feature; go back to step 2.
-5. **Open it for review.** Run the script with `-Publish` (delete the local `release/2.1.0` from step 4 first), or push the branch by hand and open a pull request `release/2.1.0 -> stable`:
+   It creates `release/0.2.0` from `main`, merges each listed feature and `fork/release-config`, sets the version in all five version files, fills the feature list in `.github/README.md` from `docs/features/*.md`, commits, then runs `npm ci`, the type-check and the front-end build. Add `-CargoCheck` to also compile the Rust side. If a feature conflicts, the script stops, removes the half-built branch and names the feature; go back to step 2.
+5. **Open it for review.** Run the script with `-Publish` (delete the local `release/0.2.0` from step 4 first), or push the branch by hand and open a pull request `release/0.2.0 -> stable`:
    ```
    .\scripts\release.ps1 -Publish
    ```
@@ -56,9 +56,9 @@ Windows blocks `.ps1` scripts by default. If `.\scripts\release.ps1` is refused,
 6. **Fix what the review finds** (the pull request is labelled `waiting-for-author`), until it is approved and labelled `ready-to-promote`. Fixes made on the release branch must also go to the feature branch they belong to, or the next release won't have them.
 7. **Promote.**
    ```
-   .\scripts\release.ps1 -Promote 2.1.0
+   .\scripts\release.ps1 -Promote 0.2.0
    ```
-   It refuses unless `claude-verdict` passed on the branch's latest commit. Then it tags `v2.1.0` and moves `stable` to `release/2.1.0`, which also marks the pull request as merged. Never press **Merge** on a release pull request: a release replaces `stable`, it is not merged into it. The tag starts `.github/workflows/release.yml`, which builds the installers and creates the GitHub release (about 10 minutes).
+   It refuses unless `claude-verdict` passed on the branch's latest commit. Then it tags `v0.2.0` and moves `stable` to `release/0.2.0`, which also marks the pull request as merged. Never press **Merge** on a release pull request: a release replaces `stable`, it is not merged into it. The tag starts `.github/workflows/release.yml`, which builds the installers and creates the GitHub release (about 10 minutes).
 
 ## Test builds
 
@@ -66,7 +66,7 @@ Windows blocks `.ps1` scripts by default. If `.\scripts\release.ps1` is refused,
 .\scripts\release.ps1 -PreRelease 1 -Publish
 ```
 
-This builds `release/2.1.0-rc.1` with app version `2.1.0-1`, tags `v2.1.0-rc.1`, and the workflow publishes it as a GitHub **pre-release**. `stable` is not moved. MSI installers only accept a number after the dash, which is why the app version is `2.1.0-1` while the tag says `rc.1`.
+This builds `release/0.2.0-rc.1` with app version `0.2.0-1`, tags `v0.2.0-rc.1`, and the workflow publishes it as a GitHub **pre-release**. `stable` is not moved. MSI installers only accept a number after the dash, which is why the app version is `0.2.0-1` while the tag says `rc.1`.
 
 ## Claude review
 
@@ -99,7 +99,7 @@ Either way, carry real fixes back to the feature branch (step 6 above).
 ## Common situations
 
 - **Drop a feature from the next release:** remove it from `fork/release.json`. Its branch stays, so it can come back in a later release.
-- **Fix a bug in a shipped feature:** fix it on the feature branch, bump the version (e.g. `2.1.1`) and build a new release. Released branches are never edited.
+- **Fix a bug in a shipped feature:** fix it on the feature branch, bump the version (e.g. `0.2.1`) and build a new release. Released branches are never edited.
 - **The original project adopts a feature** (e.g. after a pull request): the script notices the feature is already in `main` and skips it. Remove it from `fork/release.json` afterwards.
 - **Offer a feature to the original project:** open a pull request from `feature/<name>` to `sattatrapy/...:main`. Leave `docs/features/<name>.md` out of it if they don't want fork docs.
 - **Update fork docs between releases:** commit to `fork/release-config`. They reach `stable` with the next release. To publish them right away, open a pull request `fork/release-config -> stable`. After Claude's review passes, merging it normally is fine, because that branch is part of every release anyway.
@@ -107,6 +107,7 @@ Either way, carry real fixes back to the feature branch (step 6 above).
 
 ## Decisions (change them here if they change)
 
-- **Versioning:** own line starting at `2.0.0`, so fork versions never collide with the original project's `1.x`. The original version a release is based on is visible in its branch history.
+- **Versioning:** the fork has its own version line, independent of the original project's numbers. `0.x.y` means in development: `0.0.1` is the first build, and later ones are `0.0.2`, `0.1.0` and so on. `1.0.0` is reserved for the first version that counts as workable. The original version a release is based on is visible in its branch history.
+- **Downgrading on your own PC:** a build installed with a higher version (e.g. the deleted test release `2.0.0`) blocks installing a lower one, because the MSI refuses downgrades. Uninstall the app first; settings survive.
 - **App ID:** the original `com.fedin.sattatracker` is kept, so a fork install replaces the original app and keeps its settings. A different ID would let both be installed, but `productName` would also need to change, because both would otherwise install into the same folder.
-- **Pre-releases:** tags with a `-` (like `v2.1.0-rc.1`) are published as GitHub pre-releases.
+- **Pre-releases:** every `0.x` release (tag `v0.*`) and every tag with a `-` (like `v0.2.0-rc.1`) is published as a GitHub pre-release. From `1.0.0` on, releases without a `-` are normal releases.
