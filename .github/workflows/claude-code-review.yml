@@ -1,7 +1,10 @@
 # Claude reviews every pull request into 'stable'.
-#   review   - posts inline comments and a summary on the PR (code-review plugin)
+#   review   - posts inline comments on the changed lines (code-review plugin)
 #   verdict  - returns { blocking, summary }; fails when blocking. Make "claude-verdict"
 #              a required status check on 'stable' (see docs/fork/RELEASING.md).
+#   decision - no blocking issues: approves, then merges (release/* PRs are only approved
+#              and labelled ready-to-promote, because a release replaces stable).
+#              Blocking issues: requests changes and labels the PR waiting-for-author.
 # Billed to the Claude subscription behind the CLAUDE_CODE_OAUTH_TOKEN secret.
 name: Claude Code Review
 
@@ -45,6 +48,8 @@ jobs:
       contents: read
       pull-requests: read
       id-token: write
+    outputs:
+      verdict: ${{ steps.claude.outputs.structured_output }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -83,4 +88,67 @@ jobs:
           if [ "$blocking" = "true" ]; then
             echo "::error::Claude found blocking issues - see the job summary and the review comments"
             exit 1
+          fi
+
+  decision:
+    name: claude-decision
+    needs: [review, verdict]
+    if: always() && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_REF: ${{ github.head_ref }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      VERDICT: ${{ needs.verdict.outputs.verdict }}
+    steps:
+      - name: Approve and merge, or request changes
+        run: |
+          gh label create waiting-for-author --color FBCA04 --description "Claude review found problems; waiting for fixes" --force >/dev/null
+          gh label create ready-to-promote --color 0E8A16 --description "Release passed Claude review; run release.ps1 -Promote" --force >/dev/null
+
+          # Only act on the commit that was reviewed; a newer push starts its own run.
+          current=$(gh pr view "$PR" --json headRefOid -q .headRefOid)
+          if [ "$current" != "$HEAD_SHA" ]; then
+            echo "The pull request moved on to $current; leaving the decision to that run."
+            exit 0
+          fi
+
+          if [ -z "$VERDICT" ]; then
+            blocking=unknown
+            summary="Claude could not produce a verdict for this commit. If this pull request changes .github/workflows/claude-code-review.yml, the review is skipped until that change is on stable (see docs/fork/RELEASING.md). Otherwise check the claude-verdict job log."
+          else
+            blocking=$(jq -r '.blocking' <<<"$VERDICT")
+            summary=$(jq -r '.summary' <<<"$VERDICT")
+          fi
+
+          if [ "$blocking" = "false" ]; then
+            gh pr edit "$PR" --remove-label waiting-for-author >/dev/null 2>&1 || true
+            printf '### Claude review: no blocking issues\n\n%s\n' "$summary" > body.md
+            # A new approval from the same reviewer replaces an earlier "changes requested".
+            if ! gh pr review "$PR" --approve --body-file body.md; then
+              echo "::warning::Could not approve. Enable 'Allow GitHub Actions to create and approve pull requests' in Settings > Actions > General."
+              gh pr comment "$PR" --body-file body.md
+            fi
+            case "$HEAD_REF" in
+              release/*)
+                gh pr edit "$PR" --add-label ready-to-promote >/dev/null
+                gh pr comment "$PR" --body "Ready to release. Run \`.\scripts\release.ps1 -Promote ${HEAD_REF#release/}\`. Do not press Merge: a release replaces stable."
+                ;;
+              *)
+                gh pr merge "$PR" --merge --match-head-commit "$HEAD_SHA"
+                ;;
+            esac
+          else
+            gh pr edit "$PR" --remove-label ready-to-promote >/dev/null 2>&1 || true
+            gh pr edit "$PR" --add-label waiting-for-author >/dev/null
+            printf '### Claude review: changes needed\n\n%s\n\nPush fixes to this branch. The review runs again and, once it passes, approves and merges automatically.\n' "$summary" > body.md
+            if ! gh pr review "$PR" --request-changes --body-file body.md; then
+              gh pr comment "$PR" --body-file body.md
+            fi
           fi

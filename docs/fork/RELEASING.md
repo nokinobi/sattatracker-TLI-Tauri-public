@@ -2,6 +2,18 @@
 
 Every release is rebuilt from scratch: the original project's latest `main`, plus the fork features picked for that release, plus this branch (`fork/release-config`). Nothing carries over from the previous release, so leaving a feature out of a release is just a matter of not listing it.
 
+## Quick reference
+
+| Goal | Command |
+| --- | --- |
+| Build the next release locally and check it | `.\scripts\release.ps1` |
+| Publish it for Claude's review (pull request into `stable`) | `.\scripts\release.ps1 -Publish` |
+| Release it after `claude-verdict` passed | `.\scripts\release.ps1 -Promote 2.1.0` |
+| Test build (GitHub pre-release, no review) | `.\scripts\release.ps1 -PreRelease 1 -Publish` |
+| Also compile the Rust side while checking | add `-CargoCheck` |
+
+The version and the features come from `fork/release.json` on this branch.
+
 ## Branches
 
 | Branch | What it is | Rules |
@@ -41,7 +53,7 @@ Windows blocks `.ps1` scripts by default. If `.\scripts\release.ps1` is refused,
    .\scripts\release.ps1 -Publish
    ```
    The script opens the pull request with `gh` if it is installed, otherwise it prints the link to open it. Claude then reviews it (see [Claude review](#claude-review)).
-6. **Fix what the review finds**, until the `claude-verdict` check is green. Fixes made on the release branch must also go to the feature branch they belong to, or the next release won't have them.
+6. **Fix what the review finds** (the pull request is labelled `waiting-for-author`), until it is approved and labelled `ready-to-promote`. Fixes made on the release branch must also go to the feature branch they belong to, or the next release won't have them.
 7. **Promote.**
    ```
    .\scripts\release.ps1 -Promote 2.1.0
@@ -60,9 +72,14 @@ This builds `release/2.1.0-rc.1` with app version `2.1.0-1`, tags `v2.1.0-rc.1`,
 
 Every pull request into `stable` is reviewed by Claude (`.github/workflows/claude-code-review.yml`). It runs on the Claude subscription behind the `CLAUDE_CODE_OAUTH_TOKEN` repository secret, not on API billing.
 
-- **`claude-review`** posts inline comments on the changed lines plus a summary comment.
+- **`claude-review`** posts inline comments on the changed lines when it finds something worth saying.
 - **`claude-verdict`** decides whether anything blocks the release (real defects only, not style). It fails when it does, and its job summary lists the blocking problems.
-- Both run again on every push to the pull request.
+- **`claude-decision`** acts on the verdict:
+  - **No blocking issues:** approves the pull request with Claude's summary, removes `waiting-for-author`, and **merges it**. Release pull requests (`release/*`) are approved and labelled `ready-to-promote` instead, because a release replaces `stable` (step 7).
+  - **Blocking issues:** requests changes with the list of problems and labels the pull request `waiting-for-author`.
+- All of it runs again on every push to the pull request, so pushing fixes leads to an automatic approval and merge once they pass.
+
+Reviews and merges are made by `github-actions[bot]`. For it to approve, enable **Settings > Actions > General > Workflow permissions > "Allow GitHub Actions to create and approve pull requests"**. Without that, it comments instead of approving.
 
 **Fixing the comments:**
 - **Claude desktop app:** open the pull request in a Claude Code session and turn on **Auto-fix**. The session reacts to new review comments and failing checks, pushes fixes to the branch, and the review runs again.
