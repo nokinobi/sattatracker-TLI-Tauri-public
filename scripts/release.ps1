@@ -362,12 +362,26 @@ if ($Finish) {
     Invoke-Git commit --quiet --allow-empty -m "chore(release): $tag" -m "Features: $featureList"
     Write-Host "Committed release notes for $tag." -ForegroundColor Green
 
+    # A release replaces stable instead of merging into it. Recording stable with the 'ours'
+    # strategy keeps the release files unchanged, but makes the pull request into stable
+    # mergeable, so its checks run, and lets -Promote move stable forward.
+    if ((Test-Git rev-parse --verify --quiet "refs/remotes/$ForkRemote/stable") -and
+        -not (Test-Git merge-base --is-ancestor "$ForkRemote/stable" HEAD)) {
+        Invoke-Git merge --quiet -s ours --no-edit -m "chore(release): replace stable with $tag" "$ForkRemote/stable"
+        Write-Host "Recorded stable as replaced by $tag (files unchanged)." -ForegroundColor Green
+    }
+
     if (-not $SkipChecks) {
         Write-Host 'Checks: npm ci, type-check, front-end build' -ForegroundColor Cyan
         Invoke-Checked 'npm' @('ci', '--no-audit', '--no-fund')
         Invoke-Checked 'npx' @('vue-tsc', '--noEmit')
         Invoke-Checked 'npx' @('vite', 'build')
-        if ($CargoCheck) { Invoke-Checked 'cargo' @('check', '--manifest-path', 'src-tauri/Cargo.toml') }
+        if ($CargoCheck) {
+            Invoke-Checked 'cargo' @('check', '--manifest-path', 'src-tauri/Cargo.toml')
+            # cargo rewrites Cargo.lock (e.g. re-adds the header the original project removed);
+            # the release must keep the original project's file.
+            Invoke-Git checkout -- src-tauri/Cargo.lock
+        }
         if (& git status --porcelain) { throw 'The checks changed tracked files; review them before publishing.' }
     }
 
@@ -403,7 +417,8 @@ Write-Host "claude-verdict passed on $sha" -ForegroundColor Green
 
 $releaseCommit = (& git log --grep "^chore(release): $tag$" --format=%H -1)
 if ($releaseCommit) {
-    $fixes = & git log --format='  %h %s' "$($releaseCommit.Trim())..HEAD"
+    $fixes = & git log --first-parent --format='  %h %s' "$($releaseCommit.Trim())..HEAD" |
+        Where-Object { $_ -notmatch ' chore\(release\): replace stable with ' }
     if ($fixes) {
         Write-Host 'Commits added during review. Port them to their feature branch (or fork/release-config), or the next release will not have them:' -ForegroundColor Yellow
         $fixes | ForEach-Object { Write-Host $_ }
