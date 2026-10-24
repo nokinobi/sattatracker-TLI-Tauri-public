@@ -521,7 +521,6 @@ export const useTrackerStore = defineStore('tracker', {
         if (typeof parsed.pauseTimerOnHub === 'boolean') this.pauseTimerOnHub = parsed.pauseTimerOnHub;
         if (parsed.widgetPositions) {
           this.widgetPositions = { ...this.widgetPositions, ...parsed.widgetPositions };
-          // Old name of compactWindow; a leftover entry would act as an invisible snap target.
           delete (this.widgetPositions as any).compactMap;
         }
         if (parsed.blockedItemIds) this.blockedItemIds = parsed.blockedItemIds;
