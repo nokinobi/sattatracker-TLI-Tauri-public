@@ -164,6 +164,9 @@ if ($Promote) {
 $configRef = Resolve-Branch $ConfigBranch
 $config = (& git show "${configRef}:fork/release.json") -join "`n" | ConvertFrom-Json
 if ($config.version -notmatch '^\d+\.\d+\.\d+$') { throw "fork/release.json: version must look like 2.1.0 (got '$($config.version)')." }
+foreach ($feature in $config.features) {
+    if ($feature -match '^feature/') { throw "fork/release.json: '$feature' is not a feature branch (names must start with feature/)." }
+}
 
 $version = $config.version
 $tag = "v$version"
