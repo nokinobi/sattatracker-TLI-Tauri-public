@@ -1,7 +1,7 @@
 # Claude reviews every pull request into a release branch (release/x.y.z) and into 'stable'.
 #   verdict  - one Claude run: posts an inline comment on the exact line of each problem,
 #              then returns { blocking, summary, checked }. Fails when blocking. Make
-#              "claude-verdict" a required status check on 'stable' (docs/fork/RELEASING.md).
+#              "claude-verdict" a required status check on 'stable' (docs/release/RELEASING.md).
 #   decision - no blocking issues: approves with a short note (why, and what was checked).
 #              Feature and fix PRs into a release branch are then merged; a release PR
 #              (release/x.y.z -> stable) is labelled ready-to-promote instead, because a release replaces stable.
@@ -67,7 +67,7 @@ jobs:
           if [ -z "$VERDICT" ]; then
             # The action skips itself when this workflow file differs from the copy on the
             # default branch (stable), e.g. on the PR that changes the workflow itself.
-            echo "::error::Claude returned no verdict. If this PR changes .github/workflows/claude-code-review.yml, the review is skipped until that change is on stable - see docs/fork/RELEASING.md."
+            echo "::error::Claude returned no verdict. If this PR changes .github/workflows/claude-code-review.yml, the review is skipped until that change is on stable - see docs/release/RELEASING.md."
             exit 1
           fi
           echo "$VERDICT" | jq -r '"## Claude verdict: " + (if .blocking then "blocking issues" else "no blocking issues" end) + "\n\n" + .summary + "\n\n**Checked:**\n" + ([.checked[] | "- " + .] | join("\n"))' >> "$GITHUB_STEP_SUMMARY"
@@ -107,7 +107,7 @@ jobs:
 
           if [ -z "$VERDICT" ]; then
             blocking=unknown
-            summary="Claude could not produce a verdict for this commit. If this pull request changes .github/workflows/claude-code-review.yml, the review is skipped until that change is on stable (see docs/fork/RELEASING.md). Otherwise check the claude-verdict job log."
+            summary="Claude could not produce a verdict for this commit. If this pull request changes .github/workflows/claude-code-review.yml, the review is skipped until that change is on stable (see docs/release/RELEASING.md). Otherwise check the claude-verdict job log."
             checked=""
           else
             blocking=$(jq -r '.blocking' <<<"$VERDICT")
