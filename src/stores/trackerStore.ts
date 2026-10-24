@@ -69,9 +69,6 @@ export const useTrackerStore = defineStore('tracker', {
 
     widgetOpacity: 0.9,
 
-    dashboardTheme: 'dark' as 'dark' | 'light',
-    dashboardFontScale: 1,
-
     fxDuration: 4.0,
 
     fxX: 50,
@@ -80,6 +77,9 @@ export const useTrackerStore = defineStore('tracker', {
     fxScale: 1.0,
 
     pauseTimerOnHub: true,
+
+    dashboardTheme: 'dark' as 'dark' | 'light',
+    dashboardFontScale: 1,
 
     isEditMode: false,
 
@@ -488,13 +488,13 @@ export const useTrackerStore = defineStore('tracker', {
         dropFxStyle: this.dropFxStyle,
         extraFxStyle: this.extraFxStyle,
         widgetOpacity: this.widgetOpacity,
-        dashboardTheme: this.dashboardTheme,
-        dashboardFontScale: this.dashboardFontScale,
         fxDuration: this.fxDuration,
         fxX: this.fxX,
         fxY: this.fxY,
         fxScale: this.fxScale,
         pauseTimerOnHub: this.pauseTimerOnHub,
+        dashboardTheme: this.dashboardTheme,
+        dashboardFontScale: this.dashboardFontScale,
         widgetPositions: this.widgetPositions,
         blockedItemIds: this.blockedItemIds,
         lowStockEnabled: this.lowStockEnabled
@@ -513,10 +513,6 @@ export const useTrackerStore = defineStore('tracker', {
         if (parsed.dropFxStyle) this.dropFxStyle = parsed.dropFxStyle;
         if (parsed.extraFxStyle) this.extraFxStyle = parsed.extraFxStyle;
         if (typeof parsed.widgetOpacity === 'number') this.widgetOpacity = parsed.widgetOpacity;
-        if (parsed.dashboardTheme === 'dark' || parsed.dashboardTheme === 'light') this.dashboardTheme = parsed.dashboardTheme;
-        if (typeof parsed.dashboardFontScale === 'number') {
-          this.dashboardFontScale = Math.min(1.3, Math.max(0.8, parsed.dashboardFontScale));
-        }
         if (typeof parsed.fxDuration === 'number') this.fxDuration = parsed.fxDuration;
         if (typeof parsed.fxX === 'number') this.fxX = parsed.fxX;
         if (typeof parsed.fxY === 'number') this.fxY = parsed.fxY;
@@ -527,6 +523,10 @@ export const useTrackerStore = defineStore('tracker', {
         }
         if (parsed.blockedItemIds) this.blockedItemIds = parsed.blockedItemIds;
         if (typeof parsed.lowStockEnabled === 'boolean') this.lowStockEnabled = parsed.lowStockEnabled;
+        if (parsed.dashboardTheme === 'dark' || parsed.dashboardTheme === 'light') this.dashboardTheme = parsed.dashboardTheme;
+        if (typeof parsed.dashboardFontScale === 'number') {
+          this.dashboardFontScale = Math.min(1.3, Math.max(0.8, parsed.dashboardFontScale));
+        }
       }
     }
   },
