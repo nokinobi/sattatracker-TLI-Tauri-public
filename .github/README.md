@@ -11,7 +11,7 @@ This fork uses the original app ID, so installing it replaces the original track
 ## Features added in this release
 
 <!-- features:start -->
-- No fork features in this release.
+- [Compact Window](../docs/features/compact-window.md) - One small, click-through window with profit per hour, the current map's profit and timer, and the map's loot.
 <!-- features:end -->
 
 Everything else, such as setup, hotkeys, prices and assets, works as described in the original project's [README](../README.md).
