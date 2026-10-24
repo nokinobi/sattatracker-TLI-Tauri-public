@@ -70,6 +70,7 @@ export const useTrackerStore = defineStore('tracker', {
     widgetOpacity: 0.9,
 
     dashboardTheme: 'dark' as 'dark' | 'light',
+    dashboardFontScale: 1,
 
     fxDuration: 4.0,
 
@@ -488,6 +489,7 @@ export const useTrackerStore = defineStore('tracker', {
         extraFxStyle: this.extraFxStyle,
         widgetOpacity: this.widgetOpacity,
         dashboardTheme: this.dashboardTheme,
+        dashboardFontScale: this.dashboardFontScale,
         fxDuration: this.fxDuration,
         fxX: this.fxX,
         fxY: this.fxY,
@@ -512,6 +514,9 @@ export const useTrackerStore = defineStore('tracker', {
         if (parsed.extraFxStyle) this.extraFxStyle = parsed.extraFxStyle;
         if (typeof parsed.widgetOpacity === 'number') this.widgetOpacity = parsed.widgetOpacity;
         if (parsed.dashboardTheme === 'dark' || parsed.dashboardTheme === 'light') this.dashboardTheme = parsed.dashboardTheme;
+        if (typeof parsed.dashboardFontScale === 'number') {
+          this.dashboardFontScale = Math.min(1.3, Math.max(0.8, parsed.dashboardFontScale));
+        }
         if (typeof parsed.fxDuration === 'number') this.fxDuration = parsed.fxDuration;
         if (typeof parsed.fxX === 'number') this.fxX = parsed.fxX;
         if (typeof parsed.fxY === 'number') this.fxY = parsed.fxY;

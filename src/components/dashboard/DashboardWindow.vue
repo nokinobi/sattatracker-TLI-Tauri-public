@@ -5,7 +5,11 @@
     style="background: rgba(0,0,0,0.6);"
     @click.self="$emit('close')"
   >
-    <div class="dash select-none" :data-theme="store.dashboardTheme">
+    <div
+      class="dash select-none"
+      :data-theme="store.dashboardTheme"
+      :style="{ zoom: store.dashboardFontScale, '--zoom': store.dashboardFontScale }"
+    >
       <header class="dash-header">
         <div class="dash-brand">
           <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2c2.5 3 4.5 5 4.5 8.5A4.5 4.5 0 0110 15a4.5 4.5 0 01-4.5-4.5C5.5 8 7 6.5 8 4.5c.8 1.6 1.4 2.4 2.5 3C10.8 5.6 10.6 3.8 10 2z" fill="none" stroke="var(--brand)" stroke-width="1.5" stroke-linejoin="round"/><path d="M4 18h12" stroke="var(--brand)" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -30,14 +34,14 @@
             <span class="dot"></span>{{ statusText }}
           </span>
 
-          <div class="dash-seg" role="group" aria-label="Theme">
-            <button :class="{ on: store.dashboardTheme === 'dark' }" aria-label="Dark theme" @click="setTheme('dark')">
-              <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 9.8A5.6 5.6 0 016.2 2.5a5.6 5.6 0 107.3 7.3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
-            </button>
-            <button :class="{ on: store.dashboardTheme === 'light' }" aria-label="Light theme" @click="setTheme('light')">
-              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-            </button>
-          </div>
+          <button
+            :class="['dash-btn', 'icon', { primary: showSettings }]"
+            aria-label="Settings"
+            title="Settings"
+            @click="showSettings = !showSettings"
+          >
+            <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h6M11 4h3M2 8h2M7 8h7M2 12h8M13 12h1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="9.5" cy="4" r="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="5.5" cy="8" r="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="11.5" cy="12" r="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+          </button>
 
           <button class="dash-btn" title="Save this session and start a new one" @click="confirmReset = true">
             <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 11-1.5-3.6M13 2.5V5h-2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -55,6 +59,49 @@
         <InventoryTab v-else-if="tab === 'inventory'" />
         <PricesTab v-else-if="tab === 'prices'" />
       </div>
+
+      <section v-if="showSettings" class="dash-settings" aria-label="Settings">
+        <div class="head">
+          <span class="title">Settings</span>
+          <button class="close" aria-label="Close settings" @click="showSettings = false">
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+
+        <div class="field">
+          <span class="dash-label">Theme</span>
+          <div class="dash-seg wide" role="group" aria-label="Theme">
+            <button :class="{ on: store.dashboardTheme === 'dark' }" @click="setTheme('dark')">
+              <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 9.8A5.6 5.6 0 016.2 2.5a5.6 5.6 0 107.3 7.3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+              Dark
+            </button>
+            <button :class="{ on: store.dashboardTheme === 'light' }" @click="setTheme('light')">
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Light
+            </button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="row">
+            <label class="dash-label" for="dash-text-size">Text size</label>
+            <span class="mono pct">{{ Math.round(store.dashboardFontScale * 100) }}%</span>
+          </div>
+          <div class="row slider">
+            <span class="a-small">A</span>
+            <input
+              id="dash-text-size"
+              type="range" min="0.8" max="1.3" step="0.05"
+              :value="store.dashboardFontScale"
+              @input="setFontScale(Number(($event.target as HTMLInputElement).value))"
+            />
+            <span class="a-large">A</span>
+          </div>
+          <button class="dash-btn small" @click="setFontScale(1)">Reset to 100%</button>
+        </div>
+
+        <span class="note">Changes apply right away and are remembered.</span>
+      </section>
 
       <div v-if="confirmReset" class="dash-confirm" @click.self="confirmReset = false">
         <div class="dash-confirm-box">
@@ -92,6 +139,7 @@ type TabId = 'overview' | 'session' | 'inventory' | 'prices';
 const tab = ref<TabId>('overview');
 const focusMapId = ref('');
 const confirmReset = ref(false);
+const showSettings = ref(false);
 
 const tabs = computed(() => [
   { id: 'overview' as TabId, label: 'Overview', badge: '' },
@@ -123,6 +171,11 @@ function setTheme(theme: 'dark' | 'light') {
   store.saveConfigToStorage();
 }
 
+function setFontScale(scale: number) {
+  store.dashboardFontScale = Math.min(1.3, Math.max(0.8, Math.round(scale * 100) / 100));
+  store.saveConfigToStorage();
+}
+
 function selectTab(id: TabId) {
   focusMapId.value = '';
   tab.value = id;
@@ -140,7 +193,10 @@ function startNewSession() {
 
 watch(() => props.isOpen, (open) => {
   if (open) void checkLog();
-  else confirmReset.value = false;
+  else {
+    confirmReset.value = false;
+    showSettings.value = false;
+  }
 }, { immediate: true });
 </script>
 
@@ -177,8 +233,8 @@ watch(() => props.isOpen, (open) => {
 
   width: 1000px;
   height: 660px;
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 32px);
+  max-width: calc((100vw - 32px) / var(--zoom, 1));
+  max-height: calc((100vh - 32px) / var(--zoom, 1));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -273,6 +329,22 @@ watch(() => props.isOpen, (open) => {
 .pos { color: var(--pos); }
 .neg { color: var(--neg); }
 .gold { color: var(--gold); }
+
+.dash-btn.small { height: 26px; padding: 0 10px; font-size: 11px; align-self: flex-start; }
+.dash-seg.wide { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dash-seg.wide button { height: 30px; gap: 6px; font-size: 12px; }
+
+.dash-settings { position: absolute; top: 58px; right: 96px; width: 300px; padding: 16px; border-radius: 14px; background: var(--bg); border: 1px solid var(--border); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 16px; z-index: 5; }
+.dash-settings .head { display: flex; align-items: center; justify-content: space-between; }
+.dash-settings .title { font-size: 14px; font-weight: 700; color: var(--strong); }
+.dash-settings .close { display: flex; padding: 4px; border: none; background: none; color: var(--muted); cursor: pointer; }
+.dash-settings .field { display: flex; flex-direction: column; gap: 8px; }
+.dash-settings .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dash-settings .pct { font-size: 12px; font-weight: 700; color: var(--strong); }
+.dash-settings .slider input { flex: 1; accent-color: var(--accent); }
+.dash-settings .a-small { font-size: 11px; font-weight: 600; color: var(--muted); }
+.dash-settings .a-large { font-size: 17px; font-weight: 600; color: var(--muted); }
+.dash-settings .note { font-size: 10px; color: var(--label); }
 
 .dash-confirm { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); }
 .dash-confirm-box { width: 360px; padding: 18px; border-radius: 14px; background: var(--bg); border: 1px solid var(--border); box-shadow: var(--shadow); }
