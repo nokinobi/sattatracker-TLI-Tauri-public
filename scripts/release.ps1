@@ -362,6 +362,15 @@ if ($Finish) {
     Invoke-Git commit --quiet --allow-empty -m "chore(release): $tag" -m "Features: $featureList"
     Write-Host "Committed release notes for $tag." -ForegroundColor Green
 
+    # A release replaces stable instead of merging into it. Recording stable with the 'ours'
+    # strategy keeps the release files unchanged, but makes the pull request into stable
+    # mergeable, so its checks run, and lets -Promote move stable forward.
+    if ((Test-Git rev-parse --verify --quiet "refs/remotes/$ForkRemote/stable") -and
+        -not (Test-Git merge-base --is-ancestor "$ForkRemote/stable" HEAD)) {
+        Invoke-Git merge --quiet -s ours --no-edit -m "chore(release): replace stable with $tag" "$ForkRemote/stable"
+        Write-Host "Recorded stable as replaced by $tag (files unchanged)." -ForegroundColor Green
+    }
+
     if (-not $SkipChecks) {
         Write-Host 'Checks: npm ci, type-check, front-end build' -ForegroundColor Cyan
         Invoke-Checked 'npm' @('ci', '--no-audit', '--no-fund')
