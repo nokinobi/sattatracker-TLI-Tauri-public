@@ -49,7 +49,7 @@
       </div>
 
       <template v-if="showLoot">
-        <div class="shrink-0 flex items-baseline justify-between gap-2 px-2 py-[2px]" style="background: rgba(255,255,255,0.04); border-top: 1px solid rgba(255,255,255,0.08); border-bottom: 1px solid rgba(255,255,255,0.08);">
+        <div ref="barRef" class="shrink-0 flex items-baseline justify-between gap-2 px-2 py-[2px]" style="background: rgba(255,255,255,0.04); border-top: 1px solid rgba(255,255,255,0.08); border-bottom: 1px solid rgba(255,255,255,0.08);">
           <span class="text-[length:calc(10px*var(--fs))] font-bold uppercase tracking-[0.1em]" style="color: #fbbf24;">Loot</span>
           <span
             v-if="moreCount > 0"
@@ -220,6 +220,7 @@ import { cursorX, cursorY, updateCursor } from '../utils/cursor';
 
 const WIDGET_ID = 'compactWindow';
 const MIN_W     = 240;
+const RESIZE_SNAP = 12;
 const MAX_W     = 640;
 
 const PANEL_GAP    = 6;
@@ -237,6 +238,7 @@ const moreRow     = computed(() => 2 + 16 * fs.value);
 
 const topRef   = ref<HTMLElement | null>(null);
 const listRef  = ref<HTMLElement | null>(null);
+const barRef   = ref<HTMLElement | null>(null);
 const boxRef   = ref<HTMLElement | null>(null);
 const hintRef  = ref<HTMLElement | null>(null);
 const panelRef = ref<HTMLElement | null>(null);
@@ -250,6 +252,7 @@ const cfg      = ref(false);
 const dragMode = ref<'move' | 'resize' | null>(null);
 const topH     = ref(60);
 const listH    = ref(0);
+const barH     = ref(20);
 
 const isVisible   = computed(() => store.widgetPositions.compactWindow?.show !== false);
 const configuring = computed(() => cfg.value || store.isEditMode);
@@ -371,6 +374,19 @@ const onWindowMouseMove = (e: MouseEvent) => updateCursor(e.clientX, e.clientY);
 
 let hoverInterval: ReturnType<typeof setInterval> | null = null;
 
+let barObserver: ResizeObserver | null = null;
+watch(barRef, (el) => {
+  barObserver?.disconnect();
+  barObserver = null;
+  if (el) {
+    barObserver = new ResizeObserver(() => {
+      const hBar = barRef.value?.offsetHeight ?? 0;
+      if (hBar > 0) barH.value = hBar;
+    });
+    barObserver.observe(el);
+  }
+});
+
 let listObserver: ResizeObserver | null = null;
 watch(listRef, (el) => {
   listObserver?.disconnect();
@@ -415,7 +431,12 @@ function onMove(e: MouseEvent) {
     y.value = Math.min(Math.max(0, initialB + dy), window.innerHeight - 24);
   } else if (dragMode.value === 'resize') {
     w.value = Math.min(MAX_W, Math.max(MIN_W, initialA + dx));
-    h.value = Math.max(topH.value + 2, initialB + dy);
+    const minH = topH.value + 2;
+    const headerH = minH + Math.max(barH.value, lootBar.value);
+    let next = Math.max(minH, initialB + dy);
+    if (Math.abs(next - headerH) <= RESIZE_SNAP) next = headerH;
+    else if (next - minH <= RESIZE_SNAP) next = minH;
+    h.value = next;
   }
 }
 
@@ -472,6 +493,7 @@ onUnmounted(() => {
   if (hoverInterval) clearInterval(hoverInterval);
   window.removeEventListener('mousemove', onWindowMouseMove);
   topObserver?.disconnect();
+  barObserver?.disconnect();
   listObserver?.disconnect();
   window.removeEventListener('mousemove', onMove);
   window.removeEventListener('mouseup', onUp);
