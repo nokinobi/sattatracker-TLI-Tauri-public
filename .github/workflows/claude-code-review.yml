@@ -1,4 +1,4 @@
-# Claude reviews every pull request into 'stable'.
+# Claude reviews every pull request into 'stable' (ready versions) and 'preview' (pre-major builds).
 #   verdict  - one Claude run: posts an inline comment on the exact line of each problem,
 #              then returns { blocking, summary, checked }. Fails when blocking. Make
 #              "claude-verdict" a required status check on 'stable' (docs/fork/RELEASING.md).
@@ -11,7 +11,7 @@ name: Claude Code Review
 
 on:
   pull_request:
-    branches: [stable]
+    branches: [stable, preview]
     types: [opened, synchronize, ready_for_review, reopened]
 
 concurrency:
@@ -40,7 +40,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             You review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }},
-            which would bring changes into the 'stable' branch (the fork's released version).
+            which would bring changes into the '${{ github.base_ref }}' branch (the fork's released versions).
             See the changes with `git diff origin/${{ github.base_ref }}...HEAD` and read any files you need.
 
             1. For every problem you find, post ONE inline comment on the exact line with
