@@ -71,11 +71,11 @@ function Invoke-Checked([string]$Exe, [string[]]$Arguments) {
     if ($LASTEXITCODE -ne 0) { throw "$Exe $($Arguments -join ' ') failed (exit $LASTEXITCODE)" }
 }
 
-# Prefer the local branch; fall back to the fork's copy.
+# Prefer the fork's copy, which pull requests keep current; fall back to the local branch.
 function Resolve-Branch([string]$Name) {
-    if (Test-Git rev-parse --verify --quiet "refs/heads/$Name") { return $Name }
     if (Test-Git rev-parse --verify --quiet "refs/remotes/$ForkRemote/$Name") { return "$ForkRemote/$Name" }
-    throw "Branch '$Name' not found locally or on $ForkRemote."
+    if (Test-Git rev-parse --verify --quiet "refs/heads/$Name") { return $Name }
+    throw "Branch '$Name' not found on $ForkRemote or locally."
 }
 
 # Checks out a branch, created from or fast-forwarded to the fork's copy.
