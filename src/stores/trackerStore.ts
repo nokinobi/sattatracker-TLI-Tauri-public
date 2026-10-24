@@ -35,6 +35,8 @@ interface CurrentMapMeta {
 export interface InventorySnapshotItem {
   item_id:   string;
   item_name: string;
+  item_type?: string;
+  page_id?:  number;
   qty:       number;
   price:     number;
 }
@@ -66,6 +68,8 @@ export const useTrackerStore = defineStore('tracker', {
     extraFxStyle: 'piggy' as 'casino' | 'piggy' | 'web' | 'chain' | 'orbital' | 'bubbles' | 'swarm' | 'rings' | 'slash' | 'shockwave' | 'confetti' | 'lightning' | 'none',
 
     widgetOpacity: 0.9,
+
+    dashboardTheme: 'dark' as 'dark' | 'light',
 
     fxDuration: 4.0,
 
@@ -483,6 +487,7 @@ export const useTrackerStore = defineStore('tracker', {
         dropFxStyle: this.dropFxStyle,
         extraFxStyle: this.extraFxStyle,
         widgetOpacity: this.widgetOpacity,
+        dashboardTheme: this.dashboardTheme,
         fxDuration: this.fxDuration,
         fxX: this.fxX,
         fxY: this.fxY,
@@ -506,6 +511,7 @@ export const useTrackerStore = defineStore('tracker', {
         if (parsed.dropFxStyle) this.dropFxStyle = parsed.dropFxStyle;
         if (parsed.extraFxStyle) this.extraFxStyle = parsed.extraFxStyle;
         if (typeof parsed.widgetOpacity === 'number') this.widgetOpacity = parsed.widgetOpacity;
+        if (parsed.dashboardTheme === 'dark' || parsed.dashboardTheme === 'light') this.dashboardTheme = parsed.dashboardTheme;
         if (typeof parsed.fxDuration === 'number') this.fxDuration = parsed.fxDuration;
         if (typeof parsed.fxX === 'number') this.fxX = parsed.fxX;
         if (typeof parsed.fxY === 'number') this.fxY = parsed.fxY;
