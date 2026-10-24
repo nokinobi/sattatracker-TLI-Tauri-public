@@ -9,16 +9,22 @@
 
 .EXAMPLE
     .\scripts\release.ps1 -Publish
-    Same, then pushes the branch, tags v<version> (this starts the GitHub build)
-    and moves 'stable' to the new release.
+    Same, then pushes the branch and opens a pull request into 'stable', where Claude
+    reviews it (claude-code-review.yml). Nothing is tagged yet.
+
+.EXAMPLE
+    .\scripts\release.ps1 -Promote 2.1.0
+    After the claude-verdict check passed on the pull request: tags v2.1.0 (this starts
+    the GitHub build of the installers) and moves 'stable' to release/2.1.0.
 
 .EXAMPLE
     .\scripts\release.ps1 -PreRelease 1 -Publish
     Test build: version <version>-1, branch release/<version>-rc.1, tag v<version>-rc.1.
-    Published as a GitHub pre-release; 'stable' is not moved.
+    Published right away as a GitHub pre-release, without review; 'stable' is not moved.
 #>
 param(
     [switch]$Publish,
+    [string]$Promote = '',
     [int]$PreRelease = 0,
     [switch]$SkipChecks,
     [switch]$CargoCheck,
@@ -55,6 +61,13 @@ function Resolve-Branch([string]$Name) {
 }
 
 $Utf8NoBom = New-Object System.Text.UTF8Encoding $false
+
+# owner/name of the fork, from the remote URL.
+function Get-GitHubRepo {
+    $url = (& git remote get-url $ForkRemote).Trim()
+    if ($url -notmatch 'github\.com[:/](.+?)/(.+?)(\.git)?$') { throw "$ForkRemote is not a GitHub URL: $url" }
+    return "$($Matches[1])/$($Matches[2])"
+}
 
 # Replaces the first $Count matches, keeping the file's encoding (no BOM) and line endings.
 function Set-FileVersion([string]$Path, [string]$Pattern, [string]$NewVersion, [int]$Count = 1) {
@@ -102,6 +115,51 @@ if (& git status --porcelain) { throw 'Working tree has uncommitted changes. Com
 Write-Host "Fetching $UpstreamRemote and $ForkRemote..." -ForegroundColor Cyan
 Invoke-Git fetch $UpstreamRemote --prune
 Invoke-Git fetch $ForkRemote --prune
+
+# --- Promote a reviewed release ------------------------------------------------
+
+if ($Promote) {
+    if ($Promote -notmatch '^\d+\.\d+\.\d+$') { throw "-Promote takes a version like 2.1.0 (got '$Promote')." }
+    $tag = "v$Promote"
+    $branch = "release/$Promote"
+    if (Test-Git rev-parse --verify --quiet "refs/tags/$tag") { throw "Tag $tag already exists." }
+    if (-not (Test-Git rev-parse --verify --quiet "refs/remotes/$ForkRemote/$branch")) { throw "$branch is not on $ForkRemote. Build it with -Publish first." }
+
+    # Fixes pushed during review (e.g. by Claude Auto-fix) are on the fork's copy.
+    if (Test-Git rev-parse --verify --quiet "refs/heads/$branch") {
+        Invoke-Git checkout --quiet $branch
+        Invoke-Git merge --ff-only --quiet "$ForkRemote/$branch"
+    } else {
+        Invoke-Git checkout --quiet -b $branch "$ForkRemote/$branch"
+    }
+    $sha = (& git rev-parse HEAD).Trim()
+    $repo = Get-GitHubRepo
+
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $checks = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/commits/$sha/check-runs?check_name=claude-verdict" `
+        -Headers @{ 'User-Agent' = 'fork-release-script'; 'Accept' = 'application/vnd.github+json' }
+    $check = $checks.check_runs | Sort-Object started_at -Descending | Select-Object -First 1
+    if (-not $check) { throw "No claude-verdict check on $sha. Is the pull request into stable open, and has the review run?" }
+    if ($check.status -ne 'completed') { throw "claude-verdict is still running on $sha. Try again when it finishes." }
+    if ($check.conclusion -ne 'success') { throw "claude-verdict is '$($check.conclusion)' on $sha. Address the review first: $($check.html_url)" }
+    Write-Host "claude-verdict passed on $sha" -ForegroundColor Green
+
+    $releaseCommit = (& git log --grep "^Release $tag$" --format=%H -1)
+    if ($releaseCommit) {
+        $fixes = & git log --format='  %h %s' "$($releaseCommit.Trim())..HEAD"
+        if ($fixes) {
+            Write-Host 'Commits added during review. Port them to their feature branch (or fork/release-config), or the next release will not have them:' -ForegroundColor Yellow
+            $fixes | ForEach-Object { Write-Host $_ }
+        }
+    }
+
+    Invoke-Git tag $tag
+    Invoke-Git push $ForkRemote $tag
+    # 'stable' is a pointer to the latest release; moving it also marks the pull request as merged.
+    Invoke-Git push --force $ForkRemote "${branch}:refs/heads/stable"
+    Write-Host "Tagged $tag (the GitHub workflow is building the installers) and moved stable to $branch." -ForegroundColor Green
+    return
+}
 
 $configRef = Resolve-Branch $ConfigBranch
 $config = (& git show "${configRef}:fork/release.json") -join "`n" | ConvertFrom-Json
@@ -192,19 +250,35 @@ if (-not $SkipChecks) {
 if (-not $Publish) {
     Write-Host ""
     Write-Host "Built $branch locally. Nothing was pushed." -ForegroundColor Cyan
-    Write-Host "To publish this build:"
-    Write-Host "  git push $ForkRemote ${branch}"
-    Write-Host "  git tag $tag; git push $ForkRemote $tag"
-    if ($PreRelease -eq 0) { Write-Host "  git push --force $ForkRemote ${branch}:refs/heads/stable" }
+    if ($PreRelease -gt 0) {
+        Write-Host "To publish this test build:  git push $ForkRemote $branch; git tag $tag; git push $ForkRemote $tag"
+    } else {
+        Write-Host "To publish it for review:  git push $ForkRemote $branch, then open a pull request $branch -> stable"
+    }
     return
 }
 
 Invoke-Git push $ForkRemote $branch
-Invoke-Git tag $tag
-Invoke-Git push $ForkRemote $tag
-if ($PreRelease -eq 0) {
-    # 'stable' is a pointer to the latest release, not a branch anyone commits to.
-    Invoke-Git push --force $ForkRemote "${branch}:refs/heads/stable"
-    Write-Host "stable now points to $branch" -ForegroundColor Green
+
+if ($PreRelease -gt 0) {
+    Invoke-Git tag $tag
+    Invoke-Git push $ForkRemote $tag
+    Write-Host "Pushed $branch and $tag. The GitHub workflow is building the pre-release." -ForegroundColor Green
+    return
 }
-Write-Host "Pushed $branch and $tag. The GitHub workflow is building the release." -ForegroundColor Green
+
+# Final releases go through Claude's review on a pull request into 'stable'.
+$repo = Get-GitHubRepo
+$title = "Release $tag"
+$body = "Features: $(if ($included) { $included -join ', ' } else { 'none' })`n`n" +
+        "Claude reviews this pull request. When the claude-verdict check passes, run " +
+        "``.\scripts\release.ps1 -Promote $($config.version)``. Do not press Merge: the release replaces stable, it is not merged into it."
+$gh = Get-Command gh -ErrorAction SilentlyContinue
+if ($gh) {
+    & gh pr create --repo $repo --base stable --head $branch --title $title --body $body
+    if ($LASTEXITCODE -ne 0) { throw 'gh pr create failed.' }
+} else {
+    Write-Host "Open the pull request (title: $title):" -ForegroundColor Cyan
+    Write-Host "  https://github.com/$repo/compare/stable...$($branch)?expand=1"
+}
+Write-Host "When claude-verdict passes:  .\scripts\release.ps1 -Promote $($config.version)" -ForegroundColor Green
