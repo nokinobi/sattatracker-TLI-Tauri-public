@@ -417,7 +417,8 @@ Write-Host "claude-verdict passed on $sha" -ForegroundColor Green
 
 $releaseCommit = (& git log --grep "^chore(release): $tag$" --format=%H -1)
 if ($releaseCommit) {
-    $fixes = & git log --format='  %h %s' "$($releaseCommit.Trim())..HEAD"
+    $fixes = & git log --first-parent --format='  %h %s' "$($releaseCommit.Trim())..HEAD" |
+        Where-Object { $_ -notmatch ' chore\(release\): replace stable with ' }
     if ($fixes) {
         Write-Host 'Commits added during review. Port them to their feature branch (or fork/release-config), or the next release will not have them:' -ForegroundColor Yellow
         $fixes | ForEach-Object { Write-Host $_ }
