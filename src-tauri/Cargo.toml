@@ -1,6 +1,6 @@
 [package]
 name = "tli-sattatracker"
-version = "1.2.11"
+version = "0.0.1"
 description = "Loot tracker overlay for Torchlight Infinite"
 authors = ["sattatrapy"]
 license = "MIT"
