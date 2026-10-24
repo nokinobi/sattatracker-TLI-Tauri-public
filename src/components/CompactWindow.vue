@@ -28,7 +28,6 @@
         outlineOffset: '3px',
       }"
     >
-      <!-- Numbers scale with the window width (container query units) so a narrow window doesn't cut them off. -->
       <div ref="topRef" class="shrink-0 grid" style="grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 0.7fr); container-type: inline-size;">
         <div class="px-2 py-[5px] min-w-0" style="border-right: 1px solid rgba(255,255,255,0.08);">
           <div class="text-[length:calc(10px*var(--fs))] font-bold uppercase tracking-[0.08em]" style="color: #a1a1aa;">Profit / hr</div>
@@ -229,7 +228,6 @@ const HOVER_POLL   = 60;
 
 const store = useTrackerStore();
 
-// Text size scale (--fs in the template); row heights and the sizes below grow with it.
 const fs          = computed(() => store.compactWindowFontScale);
 const rowStep     = computed(() => 22 * fs.value + 2);
 const lootBar     = computed(() => 6 + 14 * fs.value);
@@ -256,7 +254,6 @@ const listH    = ref(0);
 const isVisible   = computed(() => store.widgetPositions.compactWindow?.show !== false);
 const configuring = computed(() => cfg.value || store.isEditMode);
 
-// Resizing only changes the loot area: the top stats always stay visible.
 const showLoot = computed(() => h.value - topH.value >= lootBar.value);
 
 const costSum   = computed(() => store.mapExpenses.reduce((s, e) => s + e.total, 0));
@@ -277,7 +274,6 @@ const groupedDrops = computed(() => {
   return [...map.values()].sort((a, b) => b.total - a.total);
 });
 
-// Item rows get all the list space; the "+N more" hint lives in the Loot bar.
 const visibleCount = computed(() =>
   Math.min(groupedDrops.value.length, Math.max(0, Math.floor((listH.value + 2) / rowStep.value))));
 const visibleDrops = computed(() => groupedDrops.value.slice(0, visibleCount.value));
@@ -313,7 +309,6 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.min(Math.max(v, lo), Math.max(lo, hi));
 }
 
-// Below if it fits, else above, else beside (towards the screen centre); always kept inside the screen.
 function layoutPanel(): PanelLayout | null {
   const box = boxRef.value?.getBoundingClientRect();
   if (!box) return null;
@@ -358,7 +353,6 @@ function isOver(el: HTMLElement | null, pad: number): boolean {
   return cursorX >= r.left - pad && cursorX <= r.right + pad && cursorY >= r.top - pad && cursorY <= r.bottom + pad;
 }
 
-// The window is click-through, so hover is read from the cursor position App.vue polls rather than from mouse events.
 function pollHover() {
   if (!isVisible.value || moreCount.value === 0 || dragMode.value) {
     panel.value = null;
@@ -373,7 +367,6 @@ function pollHover() {
 
 watch(groupedDrops, () => { if (panel.value) panel.value = layoutPanel(); });
 
-// In edit/config mode the overlay is not click-through and App.vue stops polling, so track the mouse directly.
 const onWindowMouseMove = (e: MouseEvent) => updateCursor(e.clientX, e.clientY);
 
 let hoverInterval: ReturnType<typeof setInterval> | null = null;
@@ -460,7 +453,6 @@ function applySaved() {
 
 watch(() => store.widgetPositions.compactWindow, () => { if (!dragMode.value) applySaved(); }, { deep: true });
 
-// Measured with an observer because the window may be hidden (v-show) when mounted.
 let topObserver: ResizeObserver | null = null;
 
 onMounted(() => {
