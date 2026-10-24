@@ -9,28 +9,30 @@
 
     Versions are x.y.z: x.0.z with x >= 1 is a ready version (normal GitHub release);
     everything else (0.y.z, x.y.z with y >= 1) is a pre-major build (GitHub pre-release).
-    The version comes from fork/release.json on fork/release-config, or -Version.
+    The version lives only in the branch name and the tag: the release workflow sets it at
+    build time, so the original project's version files are never changed.
+    -AddFeature and -Finish use the checked-out release branch, or the only unreleased one.
 
 .EXAMPLE
-    .\scripts\release.ps1 -Start
-    Creates release/<version> from the latest main (a ready fix x.0.z starts from the previous
-    ready release instead), merges fork/release-config, sets the version, pushes the branch.
+    .\scripts\release.ps1 -Start -Version <x.y.z>
+    Creates release/<x.y.z> from the latest main (a ready fix x.0.z starts from the previous
+    ready release instead), merges fork/release-config and pushes the branch.
 
 .EXAMPLE
-    .\scripts\release.ps1 -AddFeature feature/compact-window
-    Opens a pull request feature/compact-window -> release/<version>. Claude reviews it and
-    merges it when there are no blocking issues.
+    .\scripts\release.ps1 -AddFeature feature/<name>
+    Opens a pull request feature/<name> -> release/<x.y.z>. Claude reviews it and merges it
+    when there are no blocking issues.
 
 .EXAMPLE
     .\scripts\release.ps1 -Finish
-    Writes docs/releases/release-<version>.md and the README feature list from the features
+    Writes docs/releases/release-<x.y.z>.md and the README feature list from the features
     merged into the release, runs the checks, pushes, and opens the pull request into 'stable'.
 
 .EXAMPLE
-    .\scripts\release.ps1 -Promote 0.2.0
-    After claude-verdict passed on that pull request: tags v0.2.0 (GitHub builds the installers
-    and publishes the release), moves 'stable' to release/0.2.0, and copies the release notes
-    to fork/release-config.
+    .\scripts\release.ps1 -Promote <x.y.z>
+    After claude-verdict passed on that pull request: tags v<x.y.z> (GitHub builds the
+    installers and publishes the release), moves 'stable' to release/<x.y.z>, and copies the
+    release notes to fork/release-config.
 #>
 param(
     [switch]$Start,
@@ -171,22 +173,11 @@ function Get-MergedFeatures {
     Write-Output -NoEnumerate $features
 }
 
-# Replaces the first $Count matches, keeping the file's encoding (no BOM) and line endings.
-function Set-FileVersion([string]$Path, [string]$Pattern, [string]$NewVersion, [int]$Count = 1) {
-    $full = Join-Path (Get-Location) $Path
-    $text = [System.IO.File]::ReadAllText($full)
-    $regex = New-Object System.Text.RegularExpressions.Regex $Pattern
-    if (-not $regex.IsMatch($text)) { throw "Version not found in $Path" }
-    $text = $regex.Replace($text, ('${1}' + $NewVersion + '${2}'), $Count)
-    [System.IO.File]::WriteAllText($full, $text, $Utf8NoBom)
-}
-
-function Set-AppVersion([string]$Ver) {
-    Set-FileVersion 'package.json'              '(?m)^(\s*"version":\s*")[^"]+(")' $Ver
-    Set-FileVersion 'package-lock.json'         '(?m)^(\s*"version":\s*")[^"]+(")' $Ver 2
-    Set-FileVersion 'src-tauri/tauri.conf.json' '(?m)^(\s*"version":\s*")[^"]+(")' $Ver
-    Set-FileVersion 'src-tauri/Cargo.toml'      '(?m)^(version\s*=\s*")[^"]+(")' $Ver
-    Set-FileVersion 'src-tauri/Cargo.lock'      '(name = "tli-sattatracker"\r?\nversion = ")[^"]+(")' $Ver
+# Versions of release branches on the fork that haven't been tagged (released) yet.
+function Get-OpenReleaseVersions {
+    return @(& git for-each-ref --format='%(refname:lstrip=4)' "refs/remotes/$ForkRemote/release/" |
+        Where-Object { $_ -match '^\d+\.\d+\.\d+$' } |
+        Where-Object { -not (Test-Git rev-parse --verify --quiet "refs/tags/v$_") })
 }
 
 # Rewrites the block between the feature markers in .github/README.md.
@@ -278,10 +269,20 @@ Invoke-Git fetch $ForkRemote --prune --tags
 
 if ($Promote) { $Version = $Promote }
 if (-not $Version) {
-    $configJson = (& git show "$(Resolve-Branch $ConfigBranch):fork/release.json") -join "`n" | ConvertFrom-Json
-    $Version = $configJson.version
+    # Without -Version: the checked-out release branch, or the only unreleased one on the fork.
+    $current = (& git rev-parse --abbrev-ref HEAD).Trim()
+    if ($current -match '^release/(\d+\.\d+\.\d+)$') {
+        $Version = $Matches[1]
+    } elseif ($Start) {
+        throw 'Pass the new version: -Start -Version x.y.z'
+    } else {
+        $open = Get-OpenReleaseVersions
+        if ($open.Count -eq 1) { $Version = $open[0] }
+        elseif ($open.Count -eq 0) { throw 'No open release branch. Start one with -Start -Version x.y.z' }
+        else { throw "Several open release branches ($($open -join ', ')). Pass -Version x.y.z" }
+    }
 }
-if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version must look like 0.2.0 (got '$Version')." }
+if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version must look like x.y.z (got '$Version')." }
 $tag = "v$Version"
 $branch = "release/$Version"
 
@@ -317,10 +318,7 @@ if ($Start) {
         & git branch -D $branch | Out-Null
         throw "$ConfigBranch conflicts with $base. Rebase $ConfigBranch on main, then try again."
     }
-    Set-AppVersion $Version
-    Invoke-Git add -A
-    Invoke-Git commit --quiet -m "chore(release): start $tag"
-    Write-Host "Created $branch from $base with version $Version." -ForegroundColor Green
+    Write-Host "Created $branch from $base." -ForegroundColor Green
 
     if ($NoPush) { Write-Host 'Not pushed (-NoPush).'; return }
     Invoke-Git push --quiet -u $ForkRemote $branch
