@@ -167,7 +167,11 @@ function Get-MergedFeatures {
     foreach ($line in $merges) {
         $sha, $subject = $line -split "`t", 2
         if ($subject -match '^Merge pull request #\d+ from [^/]+/(feature/\S+)') {
-            $features[$Matches[1]] = "$sha^1..$sha^2"
+            $name = $Matches[1]
+            # A feature merged again later (follow-up fixes) keeps the start of its first merge,
+            # so its notes list everything it brought into the release.
+            $from = if ($features.Contains($name)) { ($features[$name] -split '\.\.')[0] } else { "$sha^1" }
+            $features[$name] = "$from..$sha^2"
         }
     }
     Write-Output -NoEnumerate $features
