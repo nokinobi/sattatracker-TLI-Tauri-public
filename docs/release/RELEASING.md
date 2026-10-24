@@ -27,7 +27,7 @@ Versions are `x.y.z`, on the fork's own line, independent of the original projec
 | Branch | What it is | Rules |
 | --- | --- | --- |
 | `main` | Exact copy of the original project's `main` | Never commit to it. Only sync it from `upstream`. Used as the base of every release. |
-| `feature/<name>` | One fork feature | Branch from `main`, keep it rebased on `main`. Its docs go in `docs/features/<name>.md` on the same branch. |
+| `feature/<name>` | One fork feature | Branch from `main`, then add the [review workflows](#review-workflows-on-feature-branches). Keep it rebased on `main`. Its docs go in `docs/features/<name>.md` on the same branch. |
 | `fork/release-config` | Fork-wide files: this doc, the fork README (`.github/README.md`), `scripts/`, the workflows, and `docs/release/versions/` (all release notes) | Branched from `main`. Merged into every release when it starts. |
 | `release/<x.y.z>` | One release | Created by `-Start`. Changed only through reviewed pull requests until it is promoted, never after. |
 | `stable` | The latest released version; the fork's default branch on GitHub | Never commit to it. `-Promote` force-moves it to each new release. |
@@ -78,6 +78,27 @@ gh pr create --repo nokinobi/sattatracker-TLI-Tauri-public --base fork/release-c
   - a `fork/release-config` change is part of every release from the next `-Start` on.
   - A change to `claude-code-review.yml` must also go into `stable` right away, see [Limits](#claude-review).
 - **Every change is reviewed twice:** once in its own pull request, and again inside the whole feature when it is added to a release.
+
+### Review workflows on feature branches
+
+GitHub only runs workflow files that exist in a pull request's branches. A feature branch starts from the original project's `main`, which has no review workflows, so pull requests into it would get no Claude review and no commit-lint. Every feature branch therefore carries exact copies of three workflows from `stable`:
+
+- `.github/workflows/claude-code-review.yml`
+- `.github/workflows/commit-lint.yml`
+- `.github/workflows/claude.yml`
+
+**New feature:** add them right after creating the branch:
+
+```
+git checkout -b feature/<name> main
+git checkout origin/stable -- .github/workflows/claude-code-review.yml .github/workflows/commit-lint.yml .github/workflows/claude.yml
+git commit -m "ci(<name>): add the review workflows to the feature branch"
+git push -u origin feature/<name>
+```
+
+**Workflows changed:** Claude's action only runs when its workflow file is identical to the copy on `stable`. After a workflow change lands on `stable`, update every feature branch the same way: a `ci/<name>-review-workflows` branch from the feature, the `git checkout origin/stable -- ...` line above, and a pull request into the feature.
+
+The copies cause no conflicts in releases: `fork/release-config` brings the same files with the same content.
 
 ## Commit messages
 
@@ -188,7 +209,7 @@ Reviews and merges are made by `github-actions[bot]`. For it to approve, enable 
 - Bypass list: *Repository admin*, set to *Always allow*. The release script pushes the release branch and force-moves `stable`, which needs this.
 
 **Limits:**
-- **The review only runs if `claude-code-review.yml` in the pull request matches the copy on `stable`** (the default branch). A pull request that changes the workflow itself is therefore never reviewed: Claude skips it and `claude-verdict` fails with "no verdict". Merge such a change into `stable` on its own first, using your ruleset bypass. Release branches carry the workflow from `fork/release-config`, so keep `stable` and `fork/release-config` in step.
+- **The review only runs if `claude-code-review.yml` in the pull request matches the copy on `stable`** (the default branch). A pull request that changes the workflow itself is therefore never reviewed: Claude skips it and `claude-verdict` fails with "no verdict". Merge such a change into `stable` on its own first, using your ruleset bypass. Release branches carry the workflow from `fork/release-config`, and feature branches carry their own copies, so keep `stable`, `fork/release-config` and every feature branch in step (see [Review workflows on feature branches](#review-workflows-on-feature-branches)).
 - Pull requests from forks of this fork get no secrets, so their review can't run and the required check blocks them.
 - The token from `claude setup-token` expires after one year. Create a new one and update the secret.
 
@@ -197,7 +218,7 @@ Reviews and merges are made by `github-actions[bot]`. For it to approve, enable 
 - **Drop a feature from the next release:** don't add its pull request. Its branch stays, so it can come back later. The release notes list it under "Removed".
 - **Fix a bug in a pre-major build:** fix it on the feature branch, then make a new release with the next `z`. Released branches are never changed.
 - **The original project adopts a feature** (e.g. after a pull request to them): stop adding that feature's pull request; the release already has it through `main`.
-- **Offer a feature to the original project:** open a pull request from `feature/<name>` to `sattatrapy/...:main`. Leave `docs/features/<name>.md` out of it if they don't want fork docs.
+- **Offer a feature to the original project:** open a pull request from `feature/<name>` to `sattatrapy/...:main`. Leave out the review workflow copies, and `docs/features/<name>.md` if they don't want fork docs.
 - **Update fork docs between releases:** commit to `fork/release-config`. They reach `stable` with the next release. To publish them right away, open a pull request `fork/release-config -> stable`; after Claude's review passes it is merged automatically, which is fine because that branch is part of every release anyway.
 - **The original project changes `.github/workflows/release.yml`:** `fork/release-config` changes it (version from the tag, pre-release rule, release notes), so merging may conflict. Rebase `fork/release-config` on `main` and keep their change plus the `meta` step and the `args`, `releaseBody` and `prerelease` inputs.
 
