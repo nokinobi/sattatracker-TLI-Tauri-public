@@ -1,9 +1,9 @@
-# Claude reviews every pull request into a release branch (release/x.y.z) and into 'stable'.
+# Claude reviews every pull request into 'stable', a release branch (release/x.y.z), fork/* or feature/*.
 #   verdict  - one Claude run: posts an inline comment on the exact line of each problem,
 #              then returns { blocking, summary, checked }. Fails when blocking. Make
 #              "claude-verdict" a required status check on 'stable' (docs/release/RELEASING.md).
 #   decision - no blocking issues: approves with a short note (why, and what was checked).
-#              Feature and fix PRs into a release branch are then merged; a release PR
+#              Other PRs (features into a release, fixes into fork/* or feature/*) are then merged; a release PR
 #              (release/x.y.z -> stable) is labelled ready-to-promote instead, because a release replaces stable.
 #              Blocking issues: requests changes and labels the PR waiting-for-author.
 # Billed to the Claude subscription behind the CLAUDE_CODE_OAUTH_TOKEN secret.
@@ -11,7 +11,7 @@ name: Claude Code Review
 
 on:
   pull_request:
-    branches: [stable, 'release/**']
+    branches: [stable, 'release/**', 'fork/**', 'feature/**']
     types: [opened, synchronize, ready_for_review, reopened]
 
 concurrency:
