@@ -35,6 +35,8 @@ interface CurrentMapMeta {
 export interface InventorySnapshotItem {
   item_id:   string;
   item_name: string;
+  item_type?: string;
+  page_id?:  number;
   qty:       number;
   price:     number;
 }
@@ -78,6 +80,9 @@ export const useTrackerStore = defineStore('tracker', {
     fxScale: 1.0,
 
     pauseTimerOnHub: true,
+
+    dashboardTheme: 'dark' as 'dark' | 'light',
+    dashboardFontScale: 1,
 
     isEditMode: false,
 
@@ -494,6 +499,8 @@ export const useTrackerStore = defineStore('tracker', {
         fxY: this.fxY,
         fxScale: this.fxScale,
         pauseTimerOnHub: this.pauseTimerOnHub,
+        dashboardTheme: this.dashboardTheme,
+        dashboardFontScale: this.dashboardFontScale,
         widgetPositions: this.widgetPositions,
         blockedItemIds: this.blockedItemIds,
         lowStockEnabled: this.lowStockEnabled
@@ -525,6 +532,10 @@ export const useTrackerStore = defineStore('tracker', {
         }
         if (parsed.blockedItemIds) this.blockedItemIds = parsed.blockedItemIds;
         if (typeof parsed.lowStockEnabled === 'boolean') this.lowStockEnabled = parsed.lowStockEnabled;
+        if (parsed.dashboardTheme === 'dark' || parsed.dashboardTheme === 'light') this.dashboardTheme = parsed.dashboardTheme;
+        if (typeof parsed.dashboardFontScale === 'number') {
+          this.dashboardFontScale = Math.min(1.3, Math.max(0.8, parsed.dashboardFontScale));
+        }
       }
     }
   },

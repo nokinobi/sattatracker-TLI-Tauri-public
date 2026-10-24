@@ -120,6 +120,25 @@ impl BagManager {
         result
     }
 
+    pub fn get_main_inventory_pages(&self) -> HashMap<String, u32> {
+        let mut result: HashMap<String, u32> = HashMap::new();
+        for (key, slot) in &self.slots {
+            if slot.qty == 0 {
+                continue;
+            }
+            let page_id: u32 = key
+                .split(':')
+                .next()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+            if Self::is_main_inventory(page_id) {
+                let page = result.entry(slot.item_id.clone()).or_insert(page_id);
+                *page = (*page).min(page_id);
+            }
+        }
+        result
+    }
+
     pub fn is_main_inventory(page_id: u32) -> bool {
         (100..=104).contains(&page_id)
     }
