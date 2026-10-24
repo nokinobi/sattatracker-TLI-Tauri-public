@@ -13,7 +13,10 @@ One small, click-through window with profit per hour, the current map's profit a
 
 ## Using it
 
-- **Turn it on or off:** press F8 and tick **Compact Window** under Active Modules.
+**Turn it on or off:** press F8 and tick **Compact Window** under Active Modules.
+
+![F8 setup panel with the Compact Window checkbox](img/compact-window/setup-panel.png)
+
 - **Click-through:** clicks pass through the window to the game. The only clickable part is the small round handle on the top-right corner.
 - **Move:** drag the handle.
 - **Configure:** click the handle. The window gets a dashed outline, a resize grip in the bottom-right corner, and a panel with **Opacity** (30–100%, background only) and **Text size** (80–150%). Click **Done** or the handle again to finish.
