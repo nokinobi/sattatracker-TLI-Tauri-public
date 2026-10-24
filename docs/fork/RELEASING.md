@@ -72,11 +72,10 @@ This builds `release/2.1.0-rc.1` with app version `2.1.0-1`, tags `v2.1.0-rc.1`,
 
 Every pull request into `stable` is reviewed by Claude (`.github/workflows/claude-code-review.yml`). It runs on the Claude subscription behind the `CLAUDE_CODE_OAUTH_TOKEN` repository secret, not on API billing.
 
-- **`claude-review`** posts inline comments on the changed lines when it finds something worth saying.
-- **`claude-verdict`** decides whether anything blocks the release (real defects only, not style). It fails when it does, and its job summary lists the blocking problems.
+- **`claude-verdict`** is one Claude run. It posts an **inline comment on the exact line** of each problem, marked **Blocking** (real defects: bugs, build or type errors, security, data loss, broken release tooling) or **Suggestion** (at most 3, no pure style). Then it returns the verdict, a one-line summary, and a short list of what it checked. It fails when anything is blocking.
 - **`claude-decision`** acts on the verdict:
-  - **No blocking issues:** approves the pull request with Claude's summary, removes `waiting-for-author`, and **merges it**. Release pull requests (`release/*`) are approved and labelled `ready-to-promote` instead, because a release replaces `stable` (step 7).
-  - **Blocking issues:** requests changes with the list of problems and labels the pull request `waiting-for-author`.
+  - **No blocking issues:** approves with a short note (why it passed, and a "Checked:" list), removes `waiting-for-author`, and **merges**. Release pull requests (`release/*`) are approved and labelled `ready-to-promote` instead, because a release replaces `stable` (step 7).
+  - **Blocking issues:** requests changes with the summary (details are in the inline comments) and labels the pull request `waiting-for-author`.
 - All of it runs again on every push to the pull request, so pushing fixes leads to an automatic approval and merge once they pass.
 
 Reviews and merges are made by `github-actions[bot]`. For it to approve, enable **Settings > Actions > General > Workflow permissions > "Allow GitHub Actions to create and approve pull requests"**. Without that, it comments instead of approving.
