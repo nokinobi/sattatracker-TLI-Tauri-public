@@ -116,8 +116,10 @@ export function treeName(zh: string): string {
   return TREES[zh] ?? zh;
 }
 
+// Strategy title: its mechanic constellations. Profound is left out because nearly every
+// strategy has it, and in a title it reads like the Profound timemark.
 export function treeList(label: string): string {
-  return label.split('、').filter(Boolean).map(treeName).join(', ');
+  return label.split('、').filter(t => t && t !== '幽邃').map(treeName).join(', ');
 }
 
 export function areaName(key: string): string {
