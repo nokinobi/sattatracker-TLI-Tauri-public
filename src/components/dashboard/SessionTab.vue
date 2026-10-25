@@ -1,10 +1,11 @@
 <template>
   <div class="ss">
     <div class="ss-toolbar">
-      <select v-model="scope" aria-label="Session">
+      <select :value="scope" aria-label="Session" @change="pickScope">
         <option value="current">Current session · {{ fmtTime(store.sessionStartedAt) }}</option>
         <option value="all">All time</option>
         <option v-for="s in sessionOptions" :key="s.id" :value="s.id">{{ s.label }}</option>
+        <option v-if="sessionOptions.length" value="manage">Manage saved sessions…</option>
       </select>
       <div class="dash-seg" role="group" aria-label="View">
         <button :class="{ on: view === 'maps' }" @click="view = 'maps'">Maps</button>
@@ -16,6 +17,17 @@
           <div class="mono val" :class="c.tone">{{ c.value }}</div>
         </div>
       </div>
+    </div>
+
+    <div v-if="savedSession" class="ss-saved">
+      <span>Saved session · {{ savedSession.mapsLabel }} · {{ fmtFE(savedSession.profit) }} FE</span>
+      <button
+        ref="deleteBtn"
+        :class="['dash-btn', 'small', 'danger', { armed: deleteArmed }]"
+        @click="deleteSavedSession"
+      >
+        {{ deleteArmed ? `Delete ${savedSession.mapsLabel}?` : 'Delete session' }}
+      </button>
     </div>
 
     <div v-if="view === 'maps'" class="ss-maps">
@@ -132,11 +144,50 @@
         </div>
       </div>
     </div>
+
+    <div v-if="managing" class="dash-confirm ss-manage" @click.self="closeManage">
+      <section class="dash-confirm-box ss-manage-box" role="dialog" aria-label="Manage saved sessions">
+        <div class="head">
+          <span class="title">Saved sessions</span>
+          <span class="count">{{ sessionOptions.length }} saved · {{ picked.length }} selected</span>
+        </div>
+        <div class="tools">
+          <button class="dash-btn small" @click="selectOld">Select older than 30 days</button>
+          <button class="dash-btn small" @click="setPicked([])">Select none</button>
+        </div>
+        <div class="list dash-scroll">
+          <div v-if="sessionOptions.length === 0" class="ss-none">No saved sessions</div>
+          <label v-for="s in sessionOptions" :key="s.id" :class="['row', { on: picked.includes(s.id) }]">
+            <input type="checkbox" :checked="picked.includes(s.id)" @change="togglePick(s.id)" />
+            <span class="name">
+              <span>{{ s.name || `Session ${fmtWhen(s.startedAt)}` }}</span>
+              <small>{{ fmtDay(s.startedAt) }}{{ ageLabel(s.startedAt) }}</small>
+            </span>
+            <span class="mono maps">{{ s.mapsLabel }}</span>
+            <span class="mono profit" :class="s.profit >= 0 ? 'pos' : 'neg'">{{ fmtFE(s.profit) }}</span>
+          </label>
+        </div>
+        <p class="hint">Deleting removes the session and its maps from history.</p>
+        <div class="actions">
+          <button class="dash-btn" @click="closeManage">Close</button>
+          <button
+            ref="bulkBtn"
+            :class="['dash-btn', 'danger', { armed: bulkArmed }]"
+            :disabled="picked.length === 0"
+            @click="deletePicked"
+          >
+            {{ bulkLabel }}
+          </button>
+        </div>
+        <p v-if="doneText" class="done">{{ doneText }}</p>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { onClickOutside } from '@vueuse/core';
 import { useTrackerStore } from '../../stores/trackerStore';
 import { getIcon } from '../../utils/assets';
 import type { MapRecord, RecordDrop } from '../../types/history';
@@ -192,9 +243,114 @@ const sessionOptions = computed(() => {
     .sort((a, b) => b.startedAt - a.startedAt)
     .map(s => {
       const maps = counts.get(s.id) ?? s.maps;
-      const stats = `${fmtWhen(s.startedAt)} · ${maps} ${maps === 1 ? 'map' : 'maps'} · ${fmtFE(s.profit)} FE`;
-      return { id: s.id, label: s.name ? `${s.name} · ${stats}` : stats };
+      const mapsLabel = `${maps} ${maps === 1 ? 'map' : 'maps'}`;
+      const stats = `${fmtWhen(s.startedAt)} · ${mapsLabel} · ${fmtFE(s.profit)} FE`;
+      return {
+        id: s.id,
+        name: s.name ?? '',
+        startedAt: s.startedAt,
+        profit: s.profit,
+        mapsLabel,
+        label: s.name ? `${s.name} · ${stats}` : stats,
+      };
     });
+});
+
+const savedSession = computed(() => sessionOptions.value.find(s => s.id === scope.value) ?? null);
+
+const deleteArmed = ref(false);
+const deleteBtn = ref<HTMLButtonElement | null>(null);
+
+const managing = ref(false);
+const picked = ref<string[]>([]);
+const bulkArmed = ref(false);
+const bulkBtn = ref<HTMLButtonElement | null>(null);
+const doneText = ref('');
+
+const OLD_SESSION_MS = 30 * 24 * 3600 * 1000;
+const DAY_MS = 24 * 3600 * 1000;
+
+onClickOutside(deleteBtn, () => { deleteArmed.value = false; });
+onClickOutside(bulkBtn, () => { bulkArmed.value = false; });
+
+function pickScope(e: Event) {
+  const el = e.target as HTMLSelectElement;
+  if (el.value === 'manage') {
+    el.value = scope.value;
+    openManage();
+    return;
+  }
+  scope.value = el.value;
+}
+
+function deleteSavedSession() {
+  const s = savedSession.value;
+  if (!s) return;
+  if (!deleteArmed.value) {
+    deleteArmed.value = true;
+    return;
+  }
+  store.deleteSessions([s.id]);
+  scope.value = 'current';
+}
+
+function openManage() {
+  setPicked([]);
+  managing.value = true;
+}
+
+function closeManage() {
+  managing.value = false;
+  setPicked([]);
+}
+
+function setPicked(ids: string[]) {
+  picked.value = ids;
+  bulkArmed.value = false;
+  doneText.value = '';
+}
+
+function togglePick(id: string) {
+  setPicked(picked.value.includes(id) ? picked.value.filter(x => x !== id) : [...picked.value, id]);
+}
+
+function selectOld() {
+  const cutoff = Date.now() - OLD_SESSION_MS;
+  setPicked(sessionOptions.value.filter(s => s.startedAt < cutoff).map(s => s.id));
+}
+
+const bulkLabel = computed(() => {
+  const n = picked.value.length;
+  if (n === 0) return 'Delete selected';
+  return bulkArmed.value ? `Delete ${n} ${n === 1 ? 'session' : 'sessions'}?` : `Delete selected (${n})`;
+});
+
+function deletePicked() {
+  const n = picked.value.length;
+  if (n === 0) return;
+  if (!bulkArmed.value) {
+    bulkArmed.value = true;
+    return;
+  }
+  store.deleteSessions(picked.value);
+  setPicked([]);
+  doneText.value = n === 1 ? 'Deleted 1 session and its maps.' : `Deleted ${n} sessions and their maps.`;
+}
+
+function fmtDay(ms: number): string {
+  return `${new Date(ms).toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' })} ${fmtTime(ms)}`;
+}
+
+function ageLabel(ms: number): string {
+  const days = Math.floor((Date.now() - ms) / DAY_MS);
+  if (new Date(ms).toDateString() === new Date().toDateString()) return ' · today';
+  return days >= 2 ? ` · ${days} days ago` : '';
+}
+
+watch(scope, () => { deleteArmed.value = false; });
+
+watch(sessionOptions, (list) => {
+  if (scope.value !== 'current' && scope.value !== 'all' && !list.find(s => s.id === scope.value)) scope.value = 'current';
 });
 
 const rows = computed<Row[]>(() => {
@@ -238,13 +394,11 @@ const summary = computed(() => {
 const detailCells = computed(() => {
   const r = selected.value;
   if (!r) return [];
-  const perHour = r.durationSec > 0 ? (r.profit / r.durationSec) * 3600 : 0;
   return [
     { label: 'Time', value: fmtDur(r.durationSec), tone: '' },
     { label: 'Profit', value: fmtFE(r.profit), tone: r.profit >= 0 ? 'pos' : 'neg' },
-    { label: 'Per hour', value: fmtFE(perHour), tone: perHour >= 0 ? 'pos' : 'neg' },
     { label: 'Loot', value: fmtValue(r.lootValue), tone: 'gold' },
-    { label: 'Cost', value: r.expenseValue > 0 ? '−' + fmtValue(r.expenseValue) : '0', tone: r.expenseValue > 0 ? 'neg' : '' },
+    { label: 'Cost', value: r.expenseValue > 0 ? '−' + fmtValue(r.expenseValue) : '0', tone: r.expenseValue > 0 ? 'cost' : '' },
   ];
 });
 
@@ -370,8 +524,12 @@ function onChartMove(e: MouseEvent) {
 .ss-title-row h2 { margin: 0; font-size: 16px; font-weight: 700; color: var(--strong); }
 .ss-title-row .when { margin-left: auto; font-size: 11px; color: var(--label); }
 .live-pill { font-size: 10px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--accent-bg); border: 1px solid var(--accent-border); color: var(--accent-text); }
-.ss-cells { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.ss-cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .ss-cells .val { font-size: 14px; font-weight: 700; color: var(--strong); }
+.ss-cells .val.pos, .ss-summary .val.pos { color: var(--pos); }
+.ss-cells .val.neg, .ss-summary .val.neg { color: var(--neg); }
+.ss-cells .val.gold { color: var(--gold); }
+.ss-cells .val.cost { color: var(--neg-soft); }
 .ss-detail-body { flex: 1; min-height: 0; padding: 12px 18px; display: flex; flex-direction: column; gap: 8px; }
 .ss-chart { padding: 6px; }
 .ss-none { font-size: 12px; color: var(--label); }
@@ -395,4 +553,26 @@ function onChartMove(e: MouseEvent) {
 .ss-loot-line .bar b { width: 32px; text-align: right; font-size: 10px; font-weight: 500; color: var(--muted); }
 .r { text-align: right; }
 .ss-loot-line .r { font-size: 13px; font-weight: 700; }
+
+.ss-saved { display: flex; align-items: center; gap: 8px; margin: 10px 18px 0; padding: 6px 10px; border-radius: 8px; font-size: 11px; color: var(--muted); background: var(--panel); border: 1px solid var(--chip-border); }
+.ss-saved span { flex: 1; min-width: 0; }
+.ss-saved .dash-btn { align-self: center; }
+
+.ss-manage { z-index: 6; }
+.ss-manage-box { width: 520px; display: flex; flex-direction: column; gap: 12px; }
+.ss-manage-box .head { display: flex; align-items: baseline; justify-content: space-between; }
+.ss-manage-box .count { font-size: 11px; color: var(--label); }
+.ss-manage-box .tools { display: flex; gap: 6px; }
+.ss-manage-box .list { max-height: 300px; display: flex; flex-direction: column; gap: 4px; }
+.ss-manage-box .row { flex-shrink: 0; display: grid; grid-template-columns: 18px minmax(0, 1fr) 70px 60px; gap: 10px; align-items: center; padding: 7px 10px; border-radius: 8px; cursor: pointer; background: var(--panel); border: 1px solid var(--panel-border); }
+.ss-manage-box .row.on { background: color-mix(in srgb, var(--neg) 8%, transparent); border-color: color-mix(in srgb, var(--neg) 40%, transparent); }
+.ss-manage-box .row input { margin: 0; accent-color: var(--neg); }
+.ss-manage-box .name { min-width: 0; display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: var(--strong); }
+.ss-manage-box .name > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ss-manage-box .name small { font-size: 10px; font-weight: 400; color: var(--label); }
+.ss-manage-box .maps { text-align: right; font-size: 11px; color: var(--muted); }
+.ss-manage-box .profit { text-align: right; font-size: 11px; font-weight: 700; }
+.ss-manage-box p.hint { margin: 0; }
+.ss-manage-box .dash-btn:disabled { color: var(--faint); border-color: var(--chip-border); cursor: default; }
+.ss-manage-box p.done { margin: 0; padding: 8px 10px; border-radius: 8px; font-size: 11px; background: var(--accent-bg); color: var(--accent-text); }
 </style>
