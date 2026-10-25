@@ -11,7 +11,8 @@ Images on this page are rendered from the design, except the F8 panel and the ho
 - **Profit / hr** for the session, with the session time under it.
 - **Map profit**: starts at minus the map's cost (map activation plus consumables) when a map begins, and rises with every drop. Red below zero, green above.
 - **Map**: the map timer.
-- **Loot**: the current map's drops, most valuable first, with quantity and value. Before the first drop it shows "Waiting for drops…" and how much FE is needed to break even, when there is room for it.
+- **Loot**: the current map's drops, most valuable first, with quantity and value.
+- **Big numbers** stay short so they fit: one decimal below 1000 FE (`+431.5`), whole numbers from 1000 (`+9877`), then `k` from 100,000 and `M` from a million. A profit/hr in the first seconds of a session can reach millions, so it shows as `3.6M`. Before the first drop it shows "Waiting for drops…" and how much FE is needed to break even, when there is room for it.
 
 ## Using it
 
@@ -29,7 +30,7 @@ Images on this page are rendered from the design, except the F8 panel and the ho
 
 Shrunk down to the top row and the Loot bar, the window keeps only the numbers; the Loot bar says how many items there are and the full list is a hover away.
 
-![Collapsed window, normal and in configure mode](img/compact-window/collapsed.png)
+![Collapsed window, and in configure mode near the bottom of the screen with the settings above it](img/compact-window/collapsed.png)
 
 Narrowing it drops the top-row blocks one at a time:
 

@@ -32,7 +32,7 @@
         opacity: 0,
         animation: 'cw-float 2.4s ease-out 1 forwards',
       }"
-    >+{{ Math.round(fx.value) }} FE</span>
+    >{{ fmtSigned(fx.value) }} FE</span>
     <div
       ref="boxRef"
       class="relative flex flex-col overflow-hidden select-none"
@@ -49,14 +49,14 @@
     >
       <div ref="topRef" class="shrink-0 grid" :style="{ gridTemplateColumns: TOP_COLS[cols], containerType: 'inline-size' }">
         <div v-if="cols >= 2" class="px-2 py-[5px] min-w-0" style="border-right: 1px solid rgba(255,255,255,0.08);">
-          <div class="text-[length:calc(10px*var(--fs))] font-bold uppercase tracking-[0.08em]" style="color: #a1a1aa;">Profit / hr</div>
+          <div class="text-[length:calc(10px*var(--fs))] font-bold uppercase tracking-[0.08em] whitespace-nowrap truncate" style="color: #a1a1aa;">Profit / hr</div>
           <div class="font-bold leading-[1.2] whitespace-nowrap truncate" style="font-size: calc(clamp(12px, calc(6cqw * var(--cq)), 18px) * var(--fs));">
-            {{ store.profitPerHour }}<span class="text-[length:calc(10px*var(--fs))] font-semibold" style="color: #a1a1aa;"> FE/h</span>
+            {{ perHour }}<span class="text-[length:calc(10px*var(--fs))] font-semibold" style="color: #a1a1aa;"> FE/h</span>
           </div>
-          <div class="text-[length:calc(10px*var(--fs))] leading-[1.2]" style="color: #a1a1aa;">Session {{ store.formattedSessionTimer }}</div>
+          <div class="text-[length:calc(10px*var(--fs))] leading-[1.2] whitespace-nowrap truncate" style="color: #a1a1aa;">Session {{ store.formattedSessionTimer }}</div>
         </div>
         <div ref="profitRef" class="px-2 py-[5px] min-w-0" :style="cols === 3 ? { borderRight: '1px solid rgba(255,255,255,0.08)' } : {}">
-          <div class="text-[length:calc(10px*var(--fs))] font-bold uppercase tracking-[0.08em]" style="color: #a1a1aa;">Map profit</div>
+          <div class="text-[length:calc(10px*var(--fs))] font-bold uppercase tracking-[0.08em] whitespace-nowrap truncate" style="color: #a1a1aa;">Map profit</div>
           <div
             class="font-extrabold leading-[1.2] whitespace-nowrap truncate"
             :style="{
@@ -70,7 +70,7 @@
           </div>
         </div>
         <div v-if="cols === 3" class="px-2 py-[5px] min-w-0">
-          <div class="text-[length:calc(10px*var(--fs))] font-bold uppercase tracking-[0.08em]" style="color: #a1a1aa;">Map</div>
+          <div class="text-[length:calc(10px*var(--fs))] font-bold uppercase tracking-[0.08em] whitespace-nowrap truncate" style="color: #a1a1aa;">Map</div>
           <div class="font-semibold leading-[1.5]" style="font-size: calc(clamp(12px, 5cqw, 15px) * var(--fs)); font-family: Consolas, 'Cascadia Mono', monospace; color: #fbbf24;">{{ store.formattedMapTimer }}</div>
         </div>
       </div>
@@ -115,7 +115,7 @@
               <div v-if="cols > 1" class="flex-1 min-w-0 text-[length:calc(11px*var(--fs))] font-semibold truncate">{{ item.item_name }}</div>
               <div v-else class="flex-1" />
               <div v-if="cols > 1" class="text-[length:calc(11px*var(--fs))]" style="color: #a1a1aa;">×{{ item.qty }}</div>
-              <div class="w-[calc(40px*var(--fs))] text-right text-[length:calc(12px*var(--fs))] font-bold" style="color: #4ade80;">{{ fmtSigned(item.total) }}</div>
+              <div class="shrink-0 min-w-[calc(40px*var(--fs))] text-right text-[length:calc(12px*var(--fs))] font-bold whitespace-nowrap" style="color: #4ade80;">{{ fmtSigned(item.total) }}</div>
             </div>
           </div>
         </div>
@@ -263,7 +263,7 @@
           </div>
           <div class="flex-1 min-w-0 text-[length:calc(11px*var(--fs))] font-semibold truncate">{{ item.item_name }}</div>
           <div class="text-[length:calc(11px*var(--fs))]" style="color: #a1a1aa;">×{{ item.qty }}</div>
-          <div class="w-[calc(40px*var(--fs))] text-right text-[length:calc(12px*var(--fs))] font-bold" style="color: #4ade80;">{{ fmtSigned(item.total) }}</div>
+          <div class="shrink-0 min-w-[calc(40px*var(--fs))] text-right text-[length:calc(12px*var(--fs))] font-bold whitespace-nowrap" style="color: #4ade80;">{{ fmtSigned(item.total) }}</div>
         </div>
         <div v-if="panel.hidden > 0" class="text-center text-[length:calc(10px*var(--fs))] leading-[16px]" style="color: #d4d4d8;">+{{ panel.hidden }} more</div>
       </div>
@@ -291,7 +291,7 @@ const MAX_W     = 640;
 // Narrowing the window drops the top-row blocks one at a time: first the map timer,
 // then profit/hr. Map profit always stays; its width is the window's minimum.
 const FULL_W    = 240;
-const TWO_COL_W = 165;
+const TWO_COL_W = 185;
 const ONE_COL_W = 100;
 const TOP_COLS: Record<number, string> = {
   3: 'minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 0.7fr)',
@@ -454,9 +454,25 @@ function rowStyle(id: string) {
   };
 }
 
-function fmtSigned(n: number): string {
-  return (n >= 0 ? '+' : '−') + Math.abs(n).toFixed(1);
+// Keeps big numbers short enough for the top row and the loot rows: one decimal below
+// 1000, whole numbers up to 100k, then k and M (a profit/hr in the first seconds of a
+// session can reach millions).
+function fmtAmount(n: number): string {
+  const a = Math.abs(n);
+  if (a >= 999_950) return (a / 1e6).toFixed(a >= 9_999_500 ? 0 : 1) + 'M';
+  if (a >= 99_999.5) return Math.round(a / 1e3) + 'k';
+  if (a >= 999.95) return String(Math.round(a));
+  return a.toFixed(1);
 }
+
+function fmtSigned(n: number): string {
+  return (n >= 0 ? '+' : '−') + fmtAmount(n);
+}
+
+const perHour = computed(() => {
+  const n = Number(store.profitPerHour);
+  return (n < 0 ? '−' : '') + fmtAmount(n);
+});
 
 type LootRow = (typeof groupedDrops.value)[number];
 
