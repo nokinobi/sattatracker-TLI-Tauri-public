@@ -1,7 +1,7 @@
 <template>
-  <StrategyDetail v-if="selected" :row="selected" :stage="stage" @back="selected = null" />
+  <StrategyDetail v-if="selected" :key="selected.key" :row="selected" :stage="selectedStage || stage" :season-id="seasonId" @back="selected = null" />
   <div v-else class="st">
-    <aside class="st-filters" aria-label="Filters">
+    <aside :class="['st-filters', { dim: showFavorites }]" aria-label="Filters" :inert="showFavorites" :title="showFavorites ? 'Filters apply to the ladder, not to favorites' : undefined">
       <div class="st-side dash-scroll">
         <section class="st-sec">
           <button class="st-sec-head" :aria-expanded="isOpen('timemark')" @click="toggleSection('timemark')">
@@ -121,6 +121,18 @@
     <section class="st-main" aria-label="Strategy ladder">
       <div class="st-top">
         <div class="row">
+          <div class="dash-seg st-views" role="group" aria-label="List">
+            <button :class="{ on: !showFavorites }" :aria-pressed="!showFavorites" @click="showFavorites = false">Ladder</button>
+            <button :class="{ on: showFavorites }" :aria-pressed="showFavorites" @click="showFavorites = true">
+              <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden="true"><path :d="STAR" fill="currentColor"/></svg>
+              Favorites<span class="mono count">{{ favorites.length }}</span>
+            </button>
+          </div>
+          <template v-if="showFavorites">
+            <span class="heading">Favorites</span>
+            <span class="sub">{{ favorites.length }} saved · newest first · numbers as they were when saved · filters apply to the ladder only</span>
+          </template>
+          <template v-else>
           <span class="heading">{{ heading }}</span>
           <span class="sub">{{ board ? `${board.total} strategies · ranked by ${sort === 'totalCount' ? 'maps run' : 'profit per hour'}` : '' }}</span>
           <span class="status">
@@ -133,13 +145,14 @@
               <option v-for="s in stages" :key="s" :value="s">{{ stageName(s) }}</option>
             </select>
           </label>
+          </template>
         </div>
-        <div v-if="error && board" class="st-failed" role="alert">
+        <div v-if="error && board && !showFavorites" class="st-failed" role="alert">
           <span>Couldn't load {{ heading.toLowerCase() }}{{ retrying ? ', trying again…' : '.' }} {{ error }}</span>
           <span v-if="shownFor !== query" class="faint">The list below still shows the previous results.</span>
           <button v-if="!retrying" class="st-link" @click="load">Retry</button>
         </div>
-        <div v-if="active.length" class="row chips">
+        <div v-if="active.length && !showFavorites" class="row chips">
           <span class="faint">Filters:</span>
           <button
             v-for="a in active"
@@ -154,11 +167,49 @@
         </div>
       </div>
 
-      <div :class="['st-progress', { on: loading }]" role="progressbar" aria-label="Loading strategies" :aria-hidden="!loading"><span></span></div>
+      <div :class="['st-progress', { on: loading && !showFavorites }]" role="progressbar" aria-label="Loading strategies" :aria-hidden="!loading || showFavorites"><span></span></div>
       <div class="st-head">
-        <span>#</span><span>Strategy</span><span>Profit / hour</span><span class="r">Maps</span><span class="r">FE / map</span><span class="r">Time</span>
+        <span>#</span><span>Strategy</span><span>Profit / hour</span><span class="r">Maps</span><span class="r">FE / map</span><span class="r">Time</span><span></span>
       </div>
-      <div class="st-list dash-scroll">
+      <div v-if="showFavorites" class="st-list dash-scroll">
+        <div v-if="favorites.length === 0" class="dash-empty">
+          <div>
+            <div>No favorites yet</div>
+            <div class="faint small">Click the star on a strategy, or "Save to favorites" in its detail, to keep it here with your own note.</div>
+          </div>
+        </div>
+        <div
+          v-for="f in favRows"
+          :key="f.key"
+          class="st-row fav"
+          role="button"
+          tabindex="0"
+          @click="openStrategy(f.raw, f.stage)"
+          @keydown.enter.self.prevent="openStrategy(f.raw, f.stage)"
+        >
+          <span class="mono rank">{{ f.rank }}</span>
+          <span class="who">
+            <span class="title" :title="f.title">{{ f.title }}</span>
+            <span class="meta">
+              <span class="tag">{{ f.area }}</span>
+              <span v-if="f.time && f.time !== f.area" class="tag time">{{ f.time }}</span>
+              <span class="saved">{{ f.saved }}</span>
+            </span>
+            <span v-if="f.note" class="note" :title="f.note">{{ f.note }}</span>
+          </span>
+          <span class="rate">
+            <span class="track"><span :style="{ width: f.rateBar }"></span></span>
+            <span class="mono pos">{{ f.perHour }}</span>
+          </span>
+          <span class="mono r">{{ f.maps }}</span>
+          <span class="mono r gold strong">{{ f.perMap }}</span>
+          <span class="mono r faint">{{ f.dur }}</span>
+          <button class="st-star on" aria-label="Remove from favorites" title="Remove from favorites" @click.stop="removeFavorite(f.key)">
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path :d="STAR" /></svg>
+          </button>
+        </div>
+      </div>
+      <div v-else class="st-list dash-scroll">
         <div v-if="error && !board && !retrying" class="dash-empty">
           <div>
             <div>Couldn't load strategies: {{ error }}</div>
@@ -167,7 +218,15 @@
         </div>
         <div v-else-if="!board" class="dash-empty">Loading strategies…</div>
         <div v-else-if="rows.length === 0" class="dash-empty">No strategies match these filters</div>
-        <button v-for="r in rows" :key="r.key" class="st-row" @click="selected = r.raw">
+        <div
+          v-for="r in rows"
+          :key="r.key"
+          class="st-row"
+          role="button"
+          tabindex="0"
+          @click="openStrategy(r.raw, stage)"
+          @keydown.enter.self.prevent="openStrategy(r.raw, stage)"
+        >
           <span class="mono rank">{{ r.rank }}</span>
           <span class="who">
             <span class="title" :title="r.title">{{ r.title }}</span>
@@ -183,9 +242,19 @@
           <span class="mono r">{{ r.maps }}</span>
           <span class="mono r gold strong">{{ r.perMap }}</span>
           <span class="mono r faint">{{ r.dur }}</span>
-        </button>
+          <button
+            :class="['st-star', { on: r.fav }]"
+            :aria-pressed="r.fav"
+            :aria-label="r.fav ? 'Remove from favorites' : 'Save to favorites'"
+            :title="r.fav ? 'Remove from favorites' : favoritesFull ? 'Favorites are full' : 'Save to favorites'"
+            :disabled="!r.fav && favoritesFull"
+            @click.stop="toggleFavorite(r.raw, stage, seasonId)"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path :d="STAR" /></svg>
+          </button>
+        </div>
       </div>
-      <div v-if="board && pages > 1" class="st-pager">
+      <div v-if="board && pages > 1 && !showFavorites" class="st-pager">
         <button class="dash-btn small" :disabled="page <= 1" @click="page--">Previous</button>
         <span class="mono">Page {{ page }} of {{ pages }}</span>
         <button class="dash-btn small" :disabled="page >= pages" @click="page++">Next</button>
@@ -195,19 +264,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { getIcon } from '../../utils/assets';
-import { fmtAgo, fmtDur, fmtValue } from './format';
+import { fmtAgo, fmtDate, fmtDur, fmtValue } from './format';
 import StrategyDetail from './StrategyDetail.vue';
 import { PROFOUND, TREES } from './strategies/trees';
 import {
   areaName, strategyApi, itemInfo, itemKind, stageName, timeName, treeList, treeName,
-  type FilterItem, type LeaderboardData, type Query, type StageOptions, type StrategyRow, type TagsData,
+  type FilterItem, type LeaderboardData, type Query, type StageOptions, type TagsData,
 } from './strategies/api';
-
-type State = 'in' | 'out';
-type Kind = 'compass' | 'astrolabe';
-type Section = Kind | 'timemark' | 'mechanic';
+import {
+  stage, stages, seasonId, timemark, sort, minCount, page, picks, itemQuery, mechPicks, expanded, closed,
+  baseTags, tags, board, fetchedAt, stale, itemNames, localPages, shownFor, selected, selectedStage,
+  showFavorites, openStrategy, saveClosed, type Kind, type PickState as State, type Section,
+} from './strategies/state';
+import { favorites, favoriteOf, favoritesFull, removeFavorite, toggleFavorite } from './strategies/favorites';
 
 const PAGE_SIZE = 10;
 const ITEM_ROWS = 8;
@@ -216,7 +287,7 @@ const MAX_STRATEGIES = 500;
 const BIG_PAGE = 100;
 const COMPASS_SLOTS = 4;
 const ASTROLABE_SLOTS = 2;
-const CLOSED_KEY = 'tli_strategies_closed_sections';
+const STAR = 'M8 1.5l1.9 4.1 4.4.5-3.3 3 .9 4.4L8 11.3l-3.9 2.2.9-4.4-3.3-3 4.4-.5z';
 const SORTS = [
   { value: 'avgEfficiency', label: 'Profit / hour' },
   { value: 'totalCount', label: 'Maps' },
@@ -235,31 +306,9 @@ const TIMEMARKS = [
   { key: '13', label: 'Deep Space' },
 ];
 
-const stages = ref<string[]>([]);
-const stage = ref('');
-const seasonId = ref('');
-const timemark = ref('');
-const sort = ref('avgEfficiency');
-const minCount = ref(30);
-const page = ref(1);
-// Picked compasses and astrolabes (cost item id -> include / exclude).
-const picks = reactive<Record<string, State>>({});
-const itemQuery = ref('');
-// Picked mechanics (constellation, by its Chinese tree key -> include / exclude).
-const mechPicks = reactive<Record<string, State>>({});
-const expanded = reactive(new Set<Kind | 'mechanic'>());
-const closed = reactive(new Set<Section>(loadClosed()));
-
-const baseTags = ref<TagsData | null>(null);
-const tags = ref<TagsData | null>(null);
-const board = ref<LeaderboardData | null>(null);
 const loading = ref(false);
 const error = ref('');
-const stale = ref(false);
-const fetchedAt = ref(0);
 const now = ref(Date.now());
-const selected = ref<StrategyRow | null>(null);
-const itemNames = ref(new Map<string, string>());
 
 const mechIn = computed(() => Object.keys(mechPicks).filter(k => mechPicks[k] === 'in'));
 
@@ -303,11 +352,7 @@ function filterQuery(): Query {
 let generation = 0;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 const retrying = ref(false);
-// Query the visible results belong to, so a failed refresh can say they are older.
-const shownFor = ref('');
 const query = computed(() => JSON.stringify([stage.value, timemark.value, sort.value, minCount.value, picks, mechPicks, page.value]));
-// True when the whole filtered list was fetched and pages are cut locally.
-const localPages = ref(false);
 
 async function load() {
   if (!stage.value) {
@@ -355,15 +400,19 @@ async function load() {
   }
 }
 
-async function loadStages() {
+// Keeps a period restored from the last run while the server still offers it.
+async function loadStages(): Promise<boolean> {
   try {
     const r = await strategyApi<StageOptions>('stage-options');
     stages.value = r.data.options.map(o => o.value);
     seasonId.value = r.data.seasonId;
+    if (stages.value.includes(stage.value)) return true;
     const latest = [...stages.value].reverse().find(s => s.startsWith('week')) ?? stages.value[stages.value.length - 1];
     stage.value = latest ?? 'legacy';
+    return false;
   } catch (e) {
     error.value = String(e);
+    return false;
   }
 }
 
@@ -391,6 +440,31 @@ const rows = computed(() => {
       title: treeList(r.talentLabel) || 'No main talent',
       area: areaName(r.mapLabel),
       time: timeName(r.timeLabel),
+      perHour: fmtValue(r.avgEfficiency * 60),
+      rateBar: Math.round((r.avgEfficiency / top) * 100) + '%',
+      maps: r.count,
+      perMap: '+' + Math.round(r.avgEarnings),
+      dur: fmtDur(r.avgDuration / 1000),
+      fav: !!favoriteOf(r.key),
+    };
+  });
+});
+
+const favRows = computed(() => {
+  const list = favorites.value;
+  const top = Math.max(1, ...list.map(f => f.row.avgEfficiency));
+  return list.map(f => {
+    const r = f.row;
+    return {
+      raw: r,
+      key: f.key,
+      stage: f.stage,
+      rank: r.rank,
+      title: treeList(r.talentLabel) || 'No main talent',
+      area: areaName(r.mapLabel),
+      time: timeName(r.timeLabel),
+      saved: `${stageName(f.stage)}${f.seasonId && f.seasonId !== seasonId.value ? ` · season ${f.seasonId}` : ''} · saved ${f.savedAt ? fmtDate(f.savedAt) : '?'}`,
+      note: f.note,
       perHour: fmtValue(r.avgEfficiency * 60),
       rateBar: Math.round((r.avgEfficiency / top) * 100) + '%',
       maps: r.count,
@@ -475,25 +549,12 @@ function clearFilters() {
   Object.keys(mechPicks).forEach(k => delete mechPicks[k]);
 }
 
-function loadClosed(): Section[] {
-  try {
-    const v = JSON.parse(localStorage.getItem(CLOSED_KEY) ?? '[]');
-    return Array.isArray(v) ? v.filter((x): x is Section => ['timemark', 'mechanic', 'compass', 'astrolabe'].includes(x)) : [];
-  } catch {
-    return [];
-  }
-}
-
 const isOpen = (section: Section) => !closed.has(section);
 
 function toggleSection(section: Section) {
   if (closed.has(section)) closed.delete(section);
   else closed.add(section);
-  try {
-    localStorage.setItem(CLOSED_KEY, JSON.stringify([...closed]));
-  } catch {
-    // Remembering collapsed sections is a convenience; ignore storage errors.
-  }
+  saveClosed();
 }
 
 let debounce: ReturnType<typeof setTimeout> | null = null;
@@ -514,10 +575,20 @@ watch(page, () => {
   shownFor.value = query.value;
 });
 
+// Results older than this are refreshed when the tab is shown again (the server caches 5 min).
+const REFRESH_AFTER = 5 * 60_000;
+
 let ticker: ReturnType<typeof setInterval> | null = null;
 onMounted(async () => {
   ticker = setInterval(() => { now.value = Date.now(); }, 30_000);
-  await loadStages();
+  // Shown again in the same run: keep what is on screen, refresh only when it is old.
+  if (stages.value.length) {
+    if (!board.value || shownFor.value !== query.value || Date.now() - fetchedAt.value > REFRESH_AFTER) void load();
+    return;
+  }
+  // First time this run: a restored period and page are kept, so load them directly; a
+  // changed period goes through the filter watcher (which starts again at page 1).
+  if (await loadStages()) void load();
 });
 onUnmounted(() => {
   if (ticker) clearInterval(ticker);
@@ -528,7 +599,8 @@ onUnmounted(() => {
 
 <style scoped>
 .st { flex: 1; min-height: 0; display: flex; }
-.st-filters { width: 310px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
+.st-filters { width: 310px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); transition: opacity 0.15s; }
+.st-filters.dim { opacity: 0.45; }
 .st-side { flex: 1; min-height: 0; padding: 12px; display: flex; flex-direction: column; gap: 14px; }
 .st-sec { display: flex; flex-direction: column; gap: 6px; }
 .st-sec-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0; background: none; border: none; cursor: pointer; color: var(--label); text-align: left; }
@@ -581,7 +653,7 @@ onUnmounted(() => {
 .st-progress.on span { opacity: 1; animation: st-sweep 1.1s ease-in-out infinite; }
 @keyframes st-sweep { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
 @media (prefers-reduced-motion: reduce) { .st-progress.on span { animation: none; width: 100%; transform: none; opacity: 0.6; } }
-.st-head, .st-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) 120px 52px 64px 50px; gap: 10px; align-items: center; }
+.st-head, .st-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) 120px 52px 64px 50px 24px; gap: 10px; align-items: center; }
 .st-head { padding: 8px 28px 4px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--label); }
 .st-list { flex: 1; min-height: 0; padding: 0 16px 8px; display: flex; flex-direction: column; gap: 4px; }
 .st-row { flex-shrink: 0; padding: 6px 12px; border-radius: 9px; text-align: left; font: inherit; font-size: 12px; color: var(--text); cursor: pointer; background: var(--panel); border: 1px solid var(--panel-border); }
@@ -596,6 +668,18 @@ onUnmounted(() => {
 .st-row .track { flex: 1; height: 5px; border-radius: 3px; background: var(--chip-border); overflow: hidden; }
 .st-row .track span { display: block; height: 100%; background: var(--accent); }
 .st-row .rate .mono { width: 42px; text-align: right; font-size: 11px; font-weight: 700; }
+.st-views button { display: inline-flex; align-items: center; gap: 5px; }
+.st-views .count { font-size: 10px; opacity: 0.75; }
+.st-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.st-star { width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; background: none; border: 1px solid transparent; color: var(--faint); }
+.st-star svg { fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; }
+.st-star:hover { color: var(--gold); border-color: var(--chip-border); }
+.st-star.on { color: var(--gold); }
+.st-star.on svg { fill: currentColor; }
+.st-star:disabled { opacity: 0.4; cursor: default; }
+.st-row .saved { font-size: 10px; color: var(--faint); }
+.st-row .note { font-size: 11px; color: var(--muted); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.small { font-size: 11px; margin-top: 4px; }
 .r { text-align: right; }
 .strong { font-weight: 700; }
 .faint { color: var(--faint); }

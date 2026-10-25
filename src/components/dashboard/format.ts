@@ -36,6 +36,10 @@ export function fmtWhen(ms: number): string {
   return sameDay ? fmtTime(ms) : `${d.toLocaleDateString([], { day: '2-digit', month: '2-digit' })} ${fmtTime(ms)}`;
 }
 
+export function fmtDate(ms: number): string {
+  return new Date(ms).toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 export function fmtFull(ms: number): string {
   return new Date(ms).toLocaleString([], {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit',

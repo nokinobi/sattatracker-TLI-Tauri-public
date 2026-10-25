@@ -25,6 +25,23 @@ Click a value to add it to the filters, click it again to remove it; the minus b
 - Each row: the strategy's constellations, its area, profit per hour with a bar, maps run, FE per map and average map time.
 - 10 strategies per page, one request per page. A line under the filters runs while results load. The compasses and astrolabes a strategy uses are shown in its detail, so the list doesn't need a request per row.
 - If loading fails (the server is busy, rate limiting or unreachable), a notice says what couldn't load and why, the list keeps the previous results, the tab tries once more after a few seconds and offers **Retry**.
+- The star at the end of a row saves the strategy to your favorites (see below).
+
+## Coming back to the tab
+
+The tab keeps where you were. Closing the dashboard (F6) or switching to another tab and back shows the same filters, page and open strategy, without loading the list again; results older than 5 minutes are refreshed.
+
+The filters, search, page, period, the open strategy and its view (Loot & cost or Talent trees) are also saved on your computer, so they come back after the tracker restarts. A period the server no longer offers falls back to the newest week.
+
+## Favorites
+
+![Favorites](img/strategy-favorites.png)
+
+- **Save a strategy:** click the star on its row, or **Save to favorites** in its detail. Click again (**In favorites**) to remove it.
+- **Note:** a saved strategy's detail has a **Your note** box under the header, for why you saved it, what to try or how it went (up to 500 characters). It's saved as you type.
+- **Favorites list:** the **Ladder / Favorites** switch at the top of the list shows your saved strategies, newest first, with your note, the period they're from and when you saved them. The numbers are the ones the strategy had when you saved it. The filters on the left apply to the ladder only and are dimmed while favorites are shown.
+- Click a favorite to open its detail for the period it was saved from. If the server no longer has that strategy (an older period or season), the detail says so; the note and the saved numbers stay.
+- Favorites are kept on your computer across seasons, up to 200; when the list is full, remove one before saving another.
 
 ## Strategy detail
 
@@ -33,6 +50,7 @@ Click a strategy to open it. The header shows:
 - **Profit per hour at today's prices**, with the change against the rate reported when the maps were run, then maps run and average map time.
 - **Compasses** (up to 4 slots) and **Astrolabes** (up to 2): the ones used in at least half of the strategy's maps, most used first, with their icons and names. Unused slots stay empty; hover a slot for the item's name.
 - Its talent point ranges per constellation.
+- **Save to favorites** next to the title, and your note when the strategy is saved.
 
 ### Loot & cost
 
@@ -65,7 +83,9 @@ The data has totals per strategy, not single maps, so the loot can't be split by
 
 ## Code
 
-- `src/components/dashboard/StrategiesTab.vue`: filters, list and paging.
+- `src/components/dashboard/StrategiesTab.vue`: filters, list, paging and the favorites list.
+- `src/components/dashboard/strategies/state.ts`: the tab's state, kept while the dashboard is closed and saved between runs (`tli_strategies_state` in local storage).
+- `src/components/dashboard/strategies/favorites.ts`: saved strategies and notes (`tli_strategy_favorites`).
 - `src/components/dashboard/StrategyDetail.vue`: the detail view.
 - `src/components/dashboard/TalentTrees.vue`: constellation tiles and tree drawing.
 - `src/components/dashboard/strategies/api.ts`: requests, caching of details and English labels.
