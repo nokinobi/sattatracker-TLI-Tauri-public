@@ -39,10 +39,45 @@
 
         <label class="dash-input">
           <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="var(--label)" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="var(--label)" stroke-width="1.5" stroke-linecap="round"/></svg>
-          <input v-model="itemQuery" placeholder="Search compasses and astrolabes" aria-label="Search compasses and astrolabes" />
+          <input v-model="itemQuery" placeholder="Search mechanics, compasses, astrolabes" aria-label="Search mechanics, compasses and astrolabes" />
         </label>
 
         <div v-if="!tags && loading" class="dash-empty">Loading filters…</div>
+        <section v-if="tags" class="st-sec">
+          <button class="st-sec-head" :aria-expanded="isOpen('mechanic')" @click="toggleSection('mechanic')">
+            <svg :class="['chev', { shut: !isOpen('mechanic') }]" width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="dash-label">Mechanics</span>
+            <span v-if="!isOpen('mechanic') && mechanics.picked" class="picked">{{ mechanics.picked }} selected</span>
+            <span v-else class="note">{{ mechanics.total }} constellations · % of strategies</span>
+          </button>
+          <template v-if="isOpen('mechanic')">
+            <div
+              v-for="v in mechanics.values"
+              :key="v.key"
+              :class="['st-value', v.state]"
+              role="button"
+              tabindex="0"
+              :aria-pressed="v.state === 'in'"
+              :title="v.state === 'in' ? 'Click to remove from filters' : 'Click to show only strategies with points in this constellation'"
+              @click="toggleMech(v.key, 'in')"
+              @keydown.enter.prevent="toggleMech(v.key, 'in')"
+            >
+              <span class="bar" :style="{ width: Math.min(100, v.share) + '%' }"></span>
+              <span class="label">{{ v.label }}</span>
+              <span class="mono share">{{ v.share.toFixed(1) }}%</span>
+              <button
+                :class="['exc', { on: v.state === 'out' }]"
+                aria-label="Exclude"
+                title="Hide strategies with points in this constellation"
+                @click.stop="toggleMech(v.key, 'out')"
+              >
+                <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <button v-if="mechanics.hidden > 0" class="st-more" @click="expanded.add('mechanic')">Show all {{ mechanics.total }}</button>
+            <div v-if="!mechanics.values.length" class="none">{{ itemQuery ? 'No matches' : 'None reported' }}</div>
+          </template>
+        </section>
         <section v-for="g in itemGroups" :key="g.kind" class="st-sec">
           <button class="st-sec-head" :aria-expanded="isOpen(g.kind)" @click="toggleSection(g.kind)">
             <svg :class="['chev', { shut: !isOpen(g.kind) }]" width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -80,7 +115,7 @@
           </template>
         </section>
       </div>
-      <div class="st-foot">Click a value to add it to the filters, minus to exclude it. Shares are % of reported maps this period. Community data, refreshed every 5 min.</div>
+      <div class="st-foot">Click a value to add it to the filters, minus to exclude it. Several mechanics: strategies must use all of them; several compasses: any of them. Community data, refreshed every 5 min.</div>
     </aside>
 
     <section class="st-main" aria-label="Strategy ladder">
@@ -111,7 +146,7 @@
             :key="a.key + a.state"
             :class="['st-active', a.state]"
             :title="a.label"
-            @click="toggle(a.key, a.state)"
+            @click="a.mech ? toggleMech(a.key, a.state) : toggle(a.key, a.state)"
           >
             <span class="txt">{{ a.state === 'out' ? 'Not: ' : '' }}{{ a.label }}</span> <span aria-label="Remove">×</span>
           </button>
@@ -174,17 +209,21 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { getIcon } from '../../utils/assets';
 import { fmtAgo, fmtDur, fmtValue } from './format';
 import StrategyDetail from './StrategyDetail.vue';
+import { PROFOUND, TREES } from './strategies/trees';
 import {
-  areaName, strategyApi, fetchDetail, itemInfo, itemKind, stageName, timeName, treeList,
+  areaName, strategyApi, fetchDetail, itemInfo, itemKind, stageName, timeName, treeList, treeName,
   type FilterItem, type LeaderboardData, type Query, type StageOptions, type StrategyRow, type TagsData,
 } from './strategies/api';
 
 type State = 'in' | 'out';
 type Kind = 'compass' | 'astrolabe';
-type Section = Kind | 'timemark';
+type Section = Kind | 'timemark' | 'mechanic';
 
 const PAGE_SIZE = 10;
 const ITEM_ROWS = 8;
+// The leaderboard returns at most 500 strategies, 100 per request.
+const MAX_STRATEGIES = 500;
+const BIG_PAGE = 100;
 const COMPASS_SLOTS = 4;
 const ASTROLABE_SLOTS = 2;
 const CLOSED_KEY = 'tli_strategies_closed_sections';
@@ -216,7 +255,9 @@ const page = ref(1);
 // Picked compasses and astrolabes (cost item id -> include / exclude).
 const picks = reactive<Record<string, State>>({});
 const itemQuery = ref('');
-const expanded = reactive(new Set<Kind>());
+// Picked mechanics (constellation, by its Chinese tree key -> include / exclude).
+const mechPicks = reactive<Record<string, State>>({});
+const expanded = reactive(new Set<Kind | 'mechanic'>());
 const closed = reactive(new Set<Section>(loadClosed()));
 
 const baseTags = ref<TagsData | null>(null);
@@ -231,11 +272,39 @@ const selected = ref<StrategyRow | null>(null);
 const itemNames = ref(new Map<string, string>());
 const kits = reactive(new Map<string, { id: string; name: string; kind: 'compass' | 'astrolabe' }[]>());
 
+const mechIn = computed(() => Object.keys(mechPicks).filter(k => mechPicks[k] === 'in'));
+
+function mechNodes(tree: string): string[] {
+  return [...new Set((TREES[tree]?.n ?? []).map(n => n[3]).filter(Boolean))];
+}
+
+// The server ORs values of one type and ANDs types together. A mechanic is sent as all of its
+// talent nodes, which means "has points in it"; only the first included mechanic fits that way,
+// the others are checked on the returned rows (see loadAll).
 function tagList(state: State): string {
   const out: string[] = [];
   if (state === 'in' && timemark.value) out.push(`timeIndex:${timemark.value}`);
   Object.entries(picks).forEach(([key, s]) => { if (s === state) out.push(`costItem:${key}`); });
+  const mechs = state === 'in' ? mechIn.value.slice(0, 1) : Object.keys(mechPicks).filter(k => mechPicks[k] === 'out');
+  mechs.forEach(tree => mechNodes(tree).forEach(md5 => out.push(`mainTalent:${md5}`)));
   return out.join(',');
+}
+
+// Several mechanics: fetch every strategy the server narrows to (up to 500) and keep the rows
+// whose constellations include the other picked mechanics too; paging then happens locally.
+async function loadAll(q: Query, extra: string[]) {
+  const first = await strategyApi<LeaderboardData>('leaderboard', { ...q, sort: sort.value, limit: String(BIG_PAGE), offset: '0' });
+  const items = [...first.data.items];
+  const total = Math.min(first.data.total, MAX_STRATEGIES);
+  for (let offset = BIG_PAGE; offset < total; offset += BIG_PAGE) {
+    const next = await strategyApi<LeaderboardData>('leaderboard', { ...q, sort: sort.value, limit: String(BIG_PAGE), offset: String(offset) });
+    items.push(...next.data.items);
+  }
+  const keep = items.filter(r => {
+    const trees = r.talentLabel.split('、');
+    return extra.every(t => trees.includes(t));
+  });
+  return { ...first, data: { ...first.data, items: keep, total: keep.length } };
 }
 
 function filterQuery(): Query {
@@ -247,7 +316,9 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null;
 const retrying = ref(false);
 // Query the visible results belong to, so a failed refresh can say they are older.
 const shownFor = ref('');
-const query = computed(() => JSON.stringify([stage.value, timemark.value, sort.value, minCount.value, picks, page.value]));
+const query = computed(() => JSON.stringify([stage.value, timemark.value, sort.value, minCount.value, picks, mechPicks, page.value]));
+// True when the whole filtered list was fetched and pages are cut locally.
+const localPages = ref(false);
 
 async function load() {
   if (!stage.value) {
@@ -260,12 +331,16 @@ async function load() {
   if (retryTimer) clearTimeout(retryTimer);
   try {
     const q = filterQuery();
+    const extra = mechIn.value.slice(1);
     const [b, t, base] = await Promise.all([
-      strategyApi<LeaderboardData>('leaderboard', { ...q, sort: sort.value, limit: String(PAGE_SIZE), offset: String((page.value - 1) * PAGE_SIZE) }),
+      extra.length
+        ? loadAll(q, extra)
+        : strategyApi<LeaderboardData>('leaderboard', { ...q, sort: sort.value, limit: String(PAGE_SIZE), offset: String((page.value - 1) * PAGE_SIZE) }),
       strategyApi<TagsData>('tags', q),
       strategyApi<TagsData>('tags', { stage: stage.value, minCount: String(minCount.value) }),
     ]);
     if (gen !== generation) return;
+    localPages.value = extra.length > 0;
     error.value = '';
     retrying.value = false;
     shownFor.value = forQuery;
@@ -276,7 +351,7 @@ async function load() {
     stale.value = b.stale || t.stale;
     fetchedAt.value = Math.min(b.fetchedAt, t.fetchedAt);
     void nameCostItems(t.data);
-    void loadKits(b.data.items, stage.value);
+    void loadKits(visibleItems.value, stage.value);
   } catch (e) {
     if (gen !== generation) return;
     error.value = String(e);
@@ -341,8 +416,13 @@ function slotsFor(key: string) {
   return [...fill('compass', COMPASS_SLOTS), ...fill('astrolabe', ASTROLABE_SLOTS)];
 }
 
-const rows = computed(() => {
+const visibleItems = computed(() => {
   const items = board.value?.items ?? [];
+  return localPages.value ? items.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE) : items;
+});
+
+const rows = computed(() => {
+  const items = visibleItems.value;
   const top = Math.max(1, ...items.map(r => r.avgEfficiency));
   return items.map(r => {
     const slots = slotsFor(r.key);
@@ -399,9 +479,36 @@ const timemarks = computed(() => {
 const timemarkLabel = computed(() => TIMEMARKS.find(t => t.key === timemark.value)?.label ?? 'All');
 const heading = computed(() => (timemark.value ? `${timemarkLabel.value} strategies` : 'All strategies'));
 
-const active = computed(() =>
-  Object.entries(picks).map(([key, state]) => ({ key, state, label: itemName(key) })),
-);
+const mechanics = computed(() => {
+  const f = tags.value?.filters;
+  // Every strategy has one timemark, so their counts add up to the strategies in view.
+  const total = (f?.timeIndex?.items ?? []).reduce((sum, i) => sum + (i.strategyCount || 0), 0) || 1;
+  const counts = new Map<string, number>();
+  (f?.mainTalentCluster?.items ?? []).forEach(i => {
+    const tree = i.key.split('|')[0];
+    counts.set(tree, (counts.get(tree) ?? 0) + (i.strategyCount || 0));
+  });
+  Object.keys(mechPicks).forEach(tree => { if (!counts.has(tree)) counts.set(tree, 0); });
+  const q = itemQuery.value.trim().toLowerCase();
+  const all = [...counts]
+    .filter(([tree]) => tree !== PROFOUND && TREES[tree])
+    .map(([tree, n]) => ({ key: tree, label: treeName(tree), share: (n / total) * 100, state: mechPicks[tree] ?? '' }))
+    .sort((a, b) => b.share - a.share);
+  const matches = all.filter(v => !q || v.label.toLowerCase().includes(q));
+  const limit = q || expanded.has('mechanic') ? matches.length : ITEM_ROWS;
+  const values = matches.filter((v, i) => i < limit || v.state);
+  return { total: all.length, values, hidden: matches.length - values.length, picked: all.filter(v => v.state).length };
+});
+
+const active = computed(() => [
+  ...Object.entries(mechPicks).map(([key, state]) => ({ key, state, label: treeName(key), mech: true })),
+  ...Object.entries(picks).map(([key, state]) => ({ key, state, label: itemName(key), mech: false })),
+]);
+
+function toggleMech(tree: string, state: State) {
+  if (mechPicks[tree] === state) delete mechPicks[tree];
+  else mechPicks[tree] = state;
+}
 
 function toggle(key: string, state: State) {
   if (picks[key] === state) delete picks[key];
@@ -410,12 +517,13 @@ function toggle(key: string, state: State) {
 
 function clearFilters() {
   Object.keys(picks).forEach(k => delete picks[k]);
+  Object.keys(mechPicks).forEach(k => delete mechPicks[k]);
 }
 
 function loadClosed(): Section[] {
   try {
     const v = JSON.parse(localStorage.getItem(CLOSED_KEY) ?? '[]');
-    return Array.isArray(v) ? v.filter((x): x is Section => ['timemark', 'compass', 'astrolabe'].includes(x)) : [];
+    return Array.isArray(v) ? v.filter((x): x is Section => ['timemark', 'mechanic', 'compass', 'astrolabe'].includes(x)) : [];
   } catch {
     return [];
   }
@@ -441,12 +549,16 @@ function scheduleLoad() {
   debounce = setTimeout(load, 250);
 }
 
-watch([stage, timemark, sort, minCount, () => JSON.stringify(picks)], () => {
+watch([stage, timemark, sort, minCount, () => JSON.stringify(picks), () => JSON.stringify(mechPicks)], () => {
   if (!Number.isFinite(minCount.value) || minCount.value < 1) minCount.value = 1;
   page.value = 1;
   scheduleLoad();
 });
-watch(page, scheduleLoad);
+watch(page, () => {
+  if (!localPages.value) return scheduleLoad();
+  shownFor.value = query.value;
+  void loadKits(visibleItems.value, stage.value);
+});
 
 let ticker: ReturnType<typeof setInterval> | null = null;
 onMounted(async () => {

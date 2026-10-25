@@ -11,7 +11,8 @@ use std::time::{Duration, Instant};
 
 const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
 const MAX_CACHE_ENTRIES: usize = 300;
-const MAX_PARAM_LEN: usize = 1024;
+// Mechanics are sent as all their talent node ids (~35 × 43 chars each), so allow several.
+const MAX_PARAM_LEN: usize = 8000;
 const LIST_TTL: Duration = Duration::from_secs(5 * 60);
 const DETAIL_TTL: Duration = Duration::from_secs(30 * 60);
 const DEFAULT_SEASON: u32 = 1601;
