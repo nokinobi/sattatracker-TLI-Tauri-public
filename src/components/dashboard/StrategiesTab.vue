@@ -172,7 +172,7 @@ const TIMEMARKS = [
   { key: '8', label: 'T7-2' },
   { key: '10', label: 'T8-1' },
   { key: '11', label: 'T8-2' },
-  { key: '幽邃', label: 'Profound' },
+  { key: '12', label: 'Profound' },
   { key: '13', label: 'Deep Space' },
 ];
 

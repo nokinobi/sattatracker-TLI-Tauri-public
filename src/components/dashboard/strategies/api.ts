@@ -93,21 +93,21 @@ const REGIONS: Record<string, string> = {
 };
 
 const AREAS: Record<string, string> = {
-  深空: 'Deep Space', 幽邃: 'Profound', 万界: 'Myriad', 画雪: 'The Frozen Canvas', '-10': 'Myriad U8',
+  深空: 'Deep Space', 幽邃: 'Profound', 万界: 'Myriad', 画雪: 'The Frozen Canvas', '-10': 'Myriad Profound',
   dogmatic: 'Dogmatic', tidecaller: 'Tidecaller', tidecallerVoidSeaLord: 'Lord of the Void Sea',
   fogCity: 'Fog City', mysticCity: 'Aeterna',
 };
 
 const TIMES: Record<string, string> = {
   '0': 'T1', '1': 'T2', '2': 'T3', '3': 'T4', '4': 'T5', '5': 'T6',
-  '6': 'T7-0', '7': 'T7-1', '8': 'T7-2', '9': 'T8-0', '10': 'T8-1', '11': 'T8-2', '12': 'U8',
+  '6': 'T7-0', '7': 'T7-1', '8': 'T7-2', '9': 'T8-0', '10': 'T8-1', '11': 'T8-2', '12': 'Profound',
   '13': 'Deep Space', 深空: 'Deep Space', 幽邃: 'Profound', K7: 'T7', K8: 'T8',
 };
 
 const MECHANICS: Record<string, string> = {
   watcher: 'Watcher', S4LocalMap: 'Aeterna', S6Map: 'Fog City', S8Map: 'The Frozen Canvas', S9Map: 'Arcana',
   S10CampsiteMap: 'Sandlord', S12Map: 'Overrealm', S13FinalMap: 'Vorax', S16FinalMap: 'Season 16 final map',
-  k7wanjie: 'Myriad T7', k8wanjie: 'Myriad T8', u8wanjie: 'Myriad U8',
+  k7wanjie: 'Myriad T7', k8wanjie: 'Myriad T8', u8wanjie: 'Myriad Profound',
 };
 
 const WATCHER = '监视者';
