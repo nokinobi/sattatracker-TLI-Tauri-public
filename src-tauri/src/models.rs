@@ -43,6 +43,8 @@ pub enum GameEvent {
 pub struct InventoryItem {
     pub item_id: String,
     pub item_name: String,
+    pub item_type: String,
+    pub page_id: u32,
     pub qty: u32,
     pub price: f64,
 }
