@@ -36,8 +36,18 @@ export interface ItemInfo { name: string; item_type: string; price: number }
 
 export type Query = Record<string, string>;
 
-export function strategyApi<T>(endpoint: 'stage-options' | 'leaderboard' | 'tags' | 'detail', query: Query = {}) {
-  return invoke<Envelope<T>>('strategy_api', { endpoint, query });
+// Writes to the tracker's log file (logs/tracker.log in its app data folder).
+export function logEvent(level: 'info' | 'warn' | 'error', message: string) {
+  invoke('log_event', { level, source: 'strategies', message }).catch(() => {});
+}
+
+export async function strategyApi<T>(endpoint: 'stage-options' | 'leaderboard' | 'tags' | 'detail', query: Query = {}) {
+  try {
+    return await invoke<Envelope<T>>('strategy_api', { endpoint, query });
+  } catch (e) {
+    logEvent('error', `${endpoint} failed in the window: ${String(e)}`);
+    throw e;
+  }
 }
 
 // Details are fetched one by one with a short gap so a page of rows doesn't
@@ -55,6 +65,7 @@ export function fetchDetail(stage: string, strategyKey: string): Promise<DetailD
     } catch (e) {
       details.delete(id);
       console.warn('Strategy detail failed', e);
+      logEvent('warn', `detail ${strategyKey} gave up: ${String(e)}`);
       return null;
     } finally {
       await new Promise(r => setTimeout(r, 300));
@@ -70,8 +81,13 @@ const itemCache = new Map<string, ItemInfo>();
 export async function itemInfo(ids: string[]): Promise<Map<string, ItemInfo>> {
   const missing = [...new Set(ids)].filter(id => !itemCache.has(id));
   if (missing.length) {
-    const got = await invoke<Record<string, ItemInfo>>('get_item_info', { ids: missing });
-    Object.entries(got).forEach(([id, info]) => itemCache.set(id, info));
+    try {
+      const got = await invoke<Record<string, ItemInfo>>('get_item_info', { ids: missing });
+      Object.entries(got).forEach(([id, info]) => itemCache.set(id, info));
+    } catch (e) {
+      logEvent('error', `item names for ${missing.length} items failed: ${String(e)}`);
+      throw e;
+    }
   }
   return itemCache;
 }
