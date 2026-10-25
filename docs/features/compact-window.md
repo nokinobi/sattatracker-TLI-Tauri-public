@@ -2,6 +2,8 @@
 
 One small, click-through window with profit per hour, the current map's profit and timer, and the map's loot.
 
+Images on this page are rendered from the design, except the F8 panel and the hover list, which are in-game screenshots.
+
 ![Compact Window](img/compact-window/window.png)
 
 ## What it shows
@@ -23,11 +25,19 @@ One small, click-through window with profit per hour, the current map's profit a
 - **Resize height:** only the loot list grows or shrinks; the top row always stays. The edge snaps to "top row only" and "top row plus the Loot bar".
 - **Resize width:** narrowing the window drops the top-row blocks one at a time, each with a snap point: first the **Map** timer, then **Profit / hr**. **Map profit** always stays; its width is the narrowest the window goes. In the narrowest layout the loot rows show only icon and value, and the Loot bar shows just the count.
 
-![Configure mode](img/compact-window/configure.png)
+![Configure mode with the settings panel](img/compact-window/configure.png)
+
+Shrunk down to the top row and the Loot bar, the window keeps only the numbers; the Loot bar says how many items there are and the full list is a hover away.
+
+![Collapsed window, normal and in configure mode](img/compact-window/collapsed.png)
+
+Narrowing it drops the top-row blocks one at a time:
+
+![Width snap points: full, without the map timer, Map profit only](img/compact-window/widths.png)
 
 ## Full loot list on hover
 
-When not all items fit, the Loot bar shows an eye icon with `+N more · hover to see all` (or `N items · hover to see all` when the window is too small for any rows). Hovering it opens the full list next to the window, without making the window catch clicks. Items hidden in the window are highlighted.
+When not all items fit, the Loot bar shows an eye icon with `+N more · hover to see all` (or `N items · hover to see all` when the window is too small for any rows). Narrower windows drop the `· hover to see all` part, and the narrowest shows only the number. Hovering it opens the full list next to the window, without making the window catch clicks. Items hidden in the window are highlighted.
 
 ![Full loot list on hover](img/compact-window/hover-full-list.png)
 
@@ -43,6 +53,8 @@ A drop worth at least the **High-value drop** amount (100 FE by default, after t
 - **Off:** no effect; the row is still marked.
 
 Set the amount to 0 to turn marking off as well.
+
+![A 505 FE drop with Both: gold border, Map profit pop with the +505 FE tag, marked row](img/compact-window/high-value-drop.png)
 
 ## Settings saved
 
