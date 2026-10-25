@@ -65,7 +65,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { getIcon } from '../../utils/assets';
-import { fmtDur, fmtFE, fmtPrice } from './format';
+import { fmtDur, fmtFE, fmtPrice, fmtValue } from './format';
 import TalentTrees from './TalentTrees.vue';
 import {
   areaName, fetchDetail, itemInfo, stageName, timeName, treeList, treeName,
@@ -129,12 +129,12 @@ const perMap = computed(() => {
 });
 
 const stats = computed(() => [
-  { label: 'Score', value: props.row.score.toFixed(1), tone: '' },
   { label: 'Maps', value: String(props.row.count), tone: '' },
   { label: 'Reported FE / map', value: fmtFE(props.row.avgEarnings), tone: 'gold' },
-  { label: 'FE / min', value: props.row.avgEfficiency.toFixed(1), tone: 'pos' },
+  { label: 'FE / hour', value: fmtValue(props.row.avgEfficiency * 60), tone: 'pos' },
   { label: 'Avg map time', value: fmtDur(props.row.avgDuration / 1000), tone: '' },
   { label: 'Loot items', value: String(detail.value?.items.loot.length ?? 0), tone: '' },
+  { label: 'Cost items', value: String(detail.value?.items.cost.length ?? 0), tone: '' },
 ]);
 
 

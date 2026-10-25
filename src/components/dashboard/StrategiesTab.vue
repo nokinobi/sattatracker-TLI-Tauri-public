@@ -96,7 +96,7 @@
 
       <div :class="['st-progress', { on: loading }]" role="progressbar" aria-label="Loading strategies" :aria-hidden="!loading"><span></span></div>
       <div class="st-head">
-        <span>#</span><span>Strategy</span><span>Score</span><span class="r">Maps</span><span class="r">FE / map</span><span class="r">FE / min</span><span class="r">Time</span>
+        <span>#</span><span>Strategy</span><span>FE / hour</span><span class="r">Maps</span><span class="r">FE / map</span><span class="r">Time</span>
       </div>
       <div class="st-list dash-scroll">
         <div v-if="error && !board" class="dash-empty">
@@ -126,13 +126,12 @@
               </span>
             </span>
           </span>
-          <span class="score">
-            <span class="track"><span :style="{ width: r.scoreBar }"></span></span>
-            <span class="mono">{{ r.score }}</span>
+          <span class="rate">
+            <span class="track"><span :style="{ width: r.rateBar }"></span></span>
+            <span class="mono pos">{{ r.perHour }}</span>
           </span>
           <span class="mono r">{{ r.maps }}</span>
           <span class="mono r gold strong">{{ r.perMap }}</span>
-          <span class="mono r pos strong">{{ r.perMin }}</span>
           <span class="mono r faint">{{ r.dur }}</span>
         </button>
       </div>
@@ -148,7 +147,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { getIcon } from '../../utils/assets';
-import { fmtAgo, fmtDur } from './format';
+import { fmtAgo, fmtDur, fmtValue } from './format';
 import StrategyDetail from './StrategyDetail.vue';
 import {
   areaName, strategyApi, fetchDetail, isJunkKey, itemInfo, itemKind, mechanicName, stageName, talentText, timeName, treeList,
@@ -163,9 +162,7 @@ const FACET_ROWS = 8;
 const COMPASS_SLOTS = 4;
 const ASTROLABE_SLOTS = 2;
 const SORTS = [
-  { value: 'score', label: 'Score' },
-  { value: 'avgEfficiency', label: 'FE / min' },
-  { value: 'avgEarnings', label: 'FE / map' },
+  { value: 'avgEfficiency', label: 'FE / hour' },
   { value: 'totalCount', label: 'Maps' },
 ];
 const FACETS: { type: FacetType; title: string; single: boolean }[] = [
@@ -188,7 +185,7 @@ const stages = ref<string[]>([]);
 const stage = ref('');
 const seasonId = ref('');
 const timemark = ref('');
-const sort = ref('score');
+const sort = ref('avgEfficiency');
 const minCount = ref(30);
 const page = ref(1);
 const picks = reactive<Record<FacetType, Record<string, State>>>({ area: {}, gameplay: {}, mainTalent: {}, costItem: {} });
@@ -302,7 +299,7 @@ function slotsFor(key: string) {
 
 const rows = computed(() => {
   const items = board.value?.items ?? [];
-  const top = Math.max(1, ...items.map(r => r.score));
+  const top = Math.max(1, ...items.map(r => r.avgEfficiency));
   return items.map(r => {
     const slots = slotsFor(r.key);
     const used = slots.filter(s => s.id).map(s => s.name);
@@ -315,11 +312,10 @@ const rows = computed(() => {
       time: timeName(r.timeLabel),
       slots,
       slotsLabel: used.length ? used.join(', ') : 'No compasses or astrolabes',
-      score: r.score.toFixed(1),
-      scoreBar: Math.round((r.score / top) * 100) + '%',
+      perHour: fmtValue(r.avgEfficiency * 60),
+      rateBar: Math.round((r.avgEfficiency / top) * 100) + '%',
       maps: r.count,
       perMap: '+' + Math.round(r.avgEarnings),
-      perMin: r.avgEfficiency.toFixed(1),
       dur: fmtDur(r.avgDuration / 1000),
     };
   });
@@ -445,7 +441,7 @@ onUnmounted(() => {
 .st-progress.on span { opacity: 1; animation: st-sweep 1.1s ease-in-out infinite; }
 @keyframes st-sweep { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
 @media (prefers-reduced-motion: reduce) { .st-progress.on span { animation: none; width: 100%; transform: none; opacity: 0.6; } }
-.st-head, .st-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) 92px 48px 64px 60px 50px; gap: 10px; align-items: center; }
+.st-head, .st-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) 120px 52px 64px 50px; gap: 10px; align-items: center; }
 .st-head { padding: 8px 28px 4px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--label); }
 .st-list { flex: 1; min-height: 0; padding: 0 16px 8px; display: flex; flex-direction: column; gap: 4px; }
 .st-row { flex-shrink: 0; padding: 6px 12px; border-radius: 9px; text-align: left; font: inherit; font-size: 12px; color: var(--text); cursor: pointer; background: var(--panel); border: 1px solid var(--panel-border); }
@@ -463,10 +459,10 @@ onUnmounted(() => {
 .slot.astrolabe { background: rgba(139,92,246,0.14); border: 1px solid rgba(139,92,246,0.45); }
 .slot.empty { background: transparent; border: 1px dashed var(--chip-border); }
 .slot.gap { margin-left: 5px; }
-.st-row .score { display: flex; align-items: center; gap: 6px; }
+.st-row .rate { display: flex; align-items: center; gap: 6px; }
 .st-row .track { flex: 1; height: 5px; border-radius: 3px; background: var(--chip-border); overflow: hidden; }
 .st-row .track span { display: block; height: 100%; background: var(--accent); }
-.st-row .score .mono { font-size: 11px; font-weight: 700; color: var(--strong); }
+.st-row .rate .mono { width: 42px; text-align: right; font-size: 11px; font-weight: 700; }
 .r { text-align: right; }
 .strong { font-weight: 700; }
 .faint { color: var(--faint); }
