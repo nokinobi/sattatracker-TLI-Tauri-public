@@ -32,7 +32,7 @@
           <div class="st-sec">
             <span class="dash-label">Maps run</span>
             <label class="ctl">at least
-              <input v-model.lazy.number="minCount" class="st-num mono" type="number" min="1" aria-label="Minimum maps run" />
+              <input v-model.lazy.number="minCount" class="st-num mono" type="text" inputmode="numeric" maxlength="5" aria-label="Minimum maps run" @focus="($event.target as HTMLInputElement).select()" />
             </label>
           </div>
         </div>
@@ -505,7 +505,7 @@ function scheduleLoad() {
 }
 
 watch([stage, timemark, sort, minCount, () => JSON.stringify(picks), () => JSON.stringify(mechPicks)], () => {
-  if (!Number.isFinite(minCount.value) || minCount.value < 1) minCount.value = 1;
+  if (!Number.isInteger(minCount.value) || minCount.value < 1) minCount.value = Math.max(1, Math.floor(Number(minCount.value)) || 1);
   page.value = 1;
   scheduleLoad();
 });
@@ -567,7 +567,7 @@ onUnmounted(() => {
 .st-mark.on { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-text); }
 .st-mark:disabled { cursor: default; opacity: 0.45; }
 .ctl { display: flex; align-items: center; gap: 6px; }
-.st-num { width: 46px; font-size: 12px; padding: 4px 6px; border-radius: 6px; background: var(--input); border: 1px solid var(--chip-border); color: var(--strong); text-align: center; outline: none; }
+.st-num { box-sizing: border-box; width: 60px; font-size: 12px; padding: 4px 6px; border-radius: 6px; background: var(--input); border: 1px solid var(--chip-border); color: var(--strong); text-align: center; outline: none; }
 .heading { font-size: 15px; font-weight: 700; color: var(--strong); }
 .sub { font-size: 11px; color: var(--label); }
 .status { margin-left: auto; font-size: 10px; color: var(--label); }
