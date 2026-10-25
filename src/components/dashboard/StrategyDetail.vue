@@ -30,6 +30,17 @@
           <div class="mono val">{{ fmtDur(row.avgDuration / 1000) }}</div>
         </div>
       </div>
+      <div class="kit">
+        <div v-for="g in kitGroups" :key="g.kind" class="kit-group">
+          <span class="dash-label">{{ g.title }}</span>
+          <span class="slots" :aria-label="g.label">
+            <span v-for="(s, i) in g.slots" :key="i" :class="['slot', g.kind, { empty: !s.id }]" :title="s.name">
+              <img v-if="s.id" :src="getIcon(s.id)" alt="" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" />
+            </span>
+          </span>
+          <span class="kit-names">{{ g.label }}</span>
+        </div>
+      </div>
       <div class="tags">
         <span v-for="t in tagChips" :key="t.kind + t.label" :class="['tag', t.kind]">{{ t.label }}</span>
       </div>
@@ -106,7 +117,7 @@ import { getIcon } from '../../utils/assets';
 import { fmtDur, fmtFE, fmtPrice } from './format';
 import TalentTrees from './TalentTrees.vue';
 import {
-  areaName, fetchDetail, itemInfo, stageName, timeName, treeList, treeName,
+  areaName, fetchDetail, itemInfo, itemKind, stageName, timeName, treeList, treeName,
   type DetailData, type ItemInfo, type ItemQty, type StrategyRow,
 } from './strategies/api';
 
@@ -114,6 +125,8 @@ const props = defineProps<{ row: StrategyRow; stage: string }>();
 defineEmits(['back']);
 
 const LOOT_ROWS = 14;
+// A map takes up to 4 compasses and 2 astrolabes.
+const KIT_SLOTS = { compass: 4, astrolabe: 2 } as const;
 // A "rare" drop shows up in fewer than one of five maps but is still worth something per map.
 const RARE_SHARE = 0.2;
 const RARE_MIN_VALUE = 0.5;
@@ -158,7 +171,7 @@ function perMapRows(list: ItemQty[]) {
       qty: r.perMap >= 10 ? r.perMap.toFixed(0) : r.perMap.toFixed(2),
       price: r.price ? fmtPrice(r.price) : 'no price',
       value: r.total.toFixed(1),
-      rate: r.perMap < 1 ? `1 in ${Math.round(1 / r.perMap)} maps` : `${r.perMap >= 10 ? r.perMap.toFixed(0) : r.perMap.toFixed(2)} / map`,
+      rate: r.perMap < 0.5 ? `1 in ${Math.round(1 / r.perMap)} maps` : `${r.perMap >= 10 ? r.perMap.toFixed(0) : r.perMap.toFixed(2)} / map`,
     }));
 }
 
@@ -190,14 +203,34 @@ function fmtChange(pct: number): string {
   return `${pct >= 0 ? '+' : '−'}${Math.abs(pct).toFixed(1)}%`;
 }
 
+// Compasses and astrolabes used in at least half of the strategy's maps, most used first.
+const kitGroups = computed(() => {
+  const d = detail.value;
+  const used = (d?.items.cost ?? [])
+    .filter(c => c.quantity >= maps.value / 2)
+    .sort((a, b) => b.quantity - a.quantity)
+    .map(c => {
+      const name = info.value.get(c.id)?.name || `Item ${c.id}`;
+      return { id: c.id, name, kind: itemKind(name) };
+    });
+  return (['compass', 'astrolabe'] as const).map(kind => {
+    const got = used.filter(u => u.kind === kind).slice(0, KIT_SLOTS[kind]);
+    const slots = Array.from({ length: KIT_SLOTS[kind] }, (_, i) => got[i] ?? { id: '', name: d ? `No ${kind}` : 'Loading…' });
+    return {
+      kind,
+      title: kind === 'compass' ? 'Compasses' : 'Astrolabes',
+      slots,
+      label: !d ? 'Loading…' : got.length ? got.map(g => g.name).join(', ') : `No ${kind}s`,
+    };
+  });
+});
+
 const tagChips = computed(() => {
   const chips: { kind: string; label: string }[] = [];
   (detail.value?.tags ?? []).forEach(t => {
     if (t.type === 'mainTalentCluster') {
       const [tree, points] = t.key.split('|');
       chips.push({ kind: 'talent', label: `${treeName(tree)}${points ? ' ' + points : ''}` });
-    } else if (t.type === 'costItem') {
-      chips.push({ kind: 'cost', label: info.value.get(t.key)?.name || `Item ${t.key}` });
     }
   });
   return chips;
@@ -220,10 +253,18 @@ const tagChips = computed(() => {
 .strip .val.neg { color: var(--neg); }
 .strip .sub { font-size: 10px; color: var(--label); }
 .strip .sub .pos, .strip .sub .neg { font-weight: 600; }
+.kit { display: flex; gap: 24px; flex-wrap: wrap; }
+.kit-group { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.slots { display: flex; gap: 3px; }
+.slot { width: 26px; height: 26px; box-sizing: border-box; border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.slot img { width: 22px; height: 22px; object-fit: contain; }
+.slot.compass { background: rgba(217,119,6,0.14); border: 1px solid rgba(217,119,6,0.45); }
+.slot.astrolabe { background: rgba(139,92,246,0.14); border: 1px solid rgba(139,92,246,0.45); }
+.slot.empty { background: transparent; border: 1px dashed var(--chip-border); }
+.kit-names { font-size: 11px; color: var(--muted); max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tags { display: flex; gap: 5px; flex-wrap: wrap; }
 .tag { font-size: 10.5px; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); }
 .tag.talent { background: var(--accent-bg); color: var(--accent-text); }
-.tag.cost { background: rgba(248,113,113,0.1); color: var(--neg); }
 
 .sd-trees { flex: 1; min-height: 0; padding: 14px 18px; }
 .sd-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 330px minmax(0, 1fr); }

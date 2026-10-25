@@ -22,13 +22,17 @@ Click a value to add it to the filters, click it again to remove it; the minus b
 ## The list
 
 - The heading names the timemark and how many strategies match, with the period on the right. Active filters show as chips under it and wrap onto more lines when needed; **Clear** removes them all.
-- Each row: the strategy's constellations, its area, the compasses (up to 4) and astrolabes (up to 2) it uses in at least half of its maps (empty slots when it uses fewer), profit per hour with a bar, maps run, FE per map and average map time.
-- 10 strategies per page. A line under the filters runs while results load.
+- Each row: the strategy's constellations, its area, profit per hour with a bar, maps run, FE per map and average map time.
+- 10 strategies per page, one request per page. A line under the filters runs while results load. The compasses and astrolabes a strategy uses are shown in its detail, so the list doesn't need a request per row.
 - If loading fails (the server is busy, rate limiting or unreachable), a notice says what couldn't load and why, the list keeps the previous results, the tab tries once more after a few seconds and offers **Retry**.
 
 ## Strategy detail
 
-Click a strategy to open it. The top row shows its **profit per hour at today's prices** (with the change against the rate reported when the maps were run), maps run and average map time, then the compasses, astrolabes and other items it uses and its talent point ranges per constellation.
+Click a strategy to open it. The header shows:
+
+- **Profit per hour at today's prices**, with the change against the rate reported when the maps were run, then maps run and average map time.
+- **Compasses** (up to 4 slots) and **Astrolabes** (up to 2): the ones used in at least half of the strategy's maps, most used first, with their icons and names. Unused slots stay empty; hover a slot for the item's name.
+- Its talent point ranges per constellation.
 
 ### Loot & cost
 

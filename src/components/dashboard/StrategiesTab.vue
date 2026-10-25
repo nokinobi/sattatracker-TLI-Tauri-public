@@ -174,16 +174,6 @@
             <span class="meta">
               <span class="tag">{{ r.area }}</span>
               <span v-if="r.time && r.time !== r.area" class="tag time">{{ r.time }}</span>
-              <span class="slots" :aria-label="r.slotsLabel">
-                <span
-                  v-for="(s, i) in r.slots"
-                  :key="i"
-                  :class="['slot', s.kind, { empty: !s.id, gap: i === COMPASS_SLOTS }]"
-                  :title="s.name"
-                >
-                  <img v-if="s.id" :src="getIcon(s.id)" alt="" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" />
-                </span>
-              </span>
             </span>
           </span>
           <span class="rate">
@@ -211,7 +201,7 @@ import { fmtAgo, fmtDur, fmtValue } from './format';
 import StrategyDetail from './StrategyDetail.vue';
 import { PROFOUND, TREES } from './strategies/trees';
 import {
-  areaName, strategyApi, fetchDetail, itemInfo, itemKind, stageName, timeName, treeList, treeName,
+  areaName, strategyApi, itemInfo, itemKind, stageName, timeName, treeList, treeName,
   type FilterItem, type LeaderboardData, type Query, type StageOptions, type StrategyRow, type TagsData,
 } from './strategies/api';
 
@@ -270,7 +260,6 @@ const fetchedAt = ref(0);
 const now = ref(Date.now());
 const selected = ref<StrategyRow | null>(null);
 const itemNames = ref(new Map<string, string>());
-const kits = reactive(new Map<string, { id: string; name: string; kind: 'compass' | 'astrolabe' }[]>());
 
 const mechIn = computed(() => Object.keys(mechPicks).filter(k => mechPicks[k] === 'in'));
 
@@ -351,7 +340,6 @@ async function load() {
     stale.value = b.stale || t.stale;
     fetchedAt.value = Math.min(b.fetchedAt, t.fetchedAt);
     void nameCostItems(t.data);
-    void loadKits(visibleItems.value, stage.value);
   } catch (e) {
     if (gen !== generation) return;
     error.value = String(e);
@@ -387,35 +375,6 @@ async function nameCostItems(t: TagsData) {
   itemNames.value = m;
 }
 
-// Compasses and astrolabes a strategy uses in at least half of its maps.
-async function loadKits(items: StrategyRow[], st: string) {
-  for (const row of items) {
-    if (kits.has(`${st}:${row.key}`)) continue;
-    const d = await fetchDetail(st, row.key);
-    if (!d || st !== stage.value) continue;
-    const info = await itemInfo(d.items.cost.map(c => c.id));
-    const used = d.items.cost
-      .filter(c => c.quantity >= d.strategy.count / 2)
-      .sort((a, b) => b.quantity - a.quantity)
-      .map(c => {
-        const name = info.get(c.id)?.name || `Item ${c.id}`;
-        return { id: c.id, name, kind: itemKind(name) };
-      });
-    kits.set(`${st}:${row.key}`, used.filter((u): u is { id: string; name: string; kind: 'compass' | 'astrolabe' } => u.kind !== 'other'));
-  }
-}
-
-function slotsFor(key: string) {
-  const kit = kits.get(`${stage.value}:${key}`);
-  const fill = (kind: 'compass' | 'astrolabe', n: number) => {
-    const got = (kit ?? []).filter(k => k.kind === kind).slice(0, n);
-    return Array.from({ length: n }, (_, i) => got[i]
-      ? { ...got[i] }
-      : { id: '', name: kit ? `No ${kind}` : 'Loading…', kind });
-  };
-  return [...fill('compass', COMPASS_SLOTS), ...fill('astrolabe', ASTROLABE_SLOTS)];
-}
-
 const visibleItems = computed(() => {
   const items = board.value?.items ?? [];
   return localPages.value ? items.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE) : items;
@@ -425,8 +384,6 @@ const rows = computed(() => {
   const items = visibleItems.value;
   const top = Math.max(1, ...items.map(r => r.avgEfficiency));
   return items.map(r => {
-    const slots = slotsFor(r.key);
-    const used = slots.filter(s => s.id).map(s => s.name);
     return {
       raw: r,
       key: r.key,
@@ -434,8 +391,6 @@ const rows = computed(() => {
       title: treeList(r.talentLabel) || 'No main talent',
       area: areaName(r.mapLabel),
       time: timeName(r.timeLabel),
-      slots,
-      slotsLabel: used.length ? used.join(', ') : 'No compasses or astrolabes',
       perHour: fmtValue(r.avgEfficiency * 60),
       rateBar: Math.round((r.avgEfficiency / top) * 100) + '%',
       maps: r.count,
@@ -557,7 +512,6 @@ watch([stage, timemark, sort, minCount, () => JSON.stringify(picks), () => JSON.
 watch(page, () => {
   if (!localPages.value) return scheduleLoad();
   shownFor.value = query.value;
-  void loadKits(visibleItems.value, stage.value);
 });
 
 let ticker: ReturnType<typeof setInterval> | null = null;
@@ -638,13 +592,6 @@ onUnmounted(() => {
 .st-row .meta { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .st-row .tag { font-size: 10px; padding: 0 6px; border-radius: 999px; background: rgba(217,119,6,0.12); color: var(--gold); }
 .st-row .tag.time { background: var(--chip); color: var(--muted); }
-.slots { display: flex; gap: 3px; margin-left: 4px; }
-.slot { width: 20px; height: 20px; box-sizing: border-box; border-radius: 5px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.slot img { width: 16px; height: 16px; object-fit: contain; }
-.slot.compass { background: rgba(217,119,6,0.14); border: 1px solid rgba(217,119,6,0.45); }
-.slot.astrolabe { background: rgba(139,92,246,0.14); border: 1px solid rgba(139,92,246,0.45); }
-.slot.empty { background: transparent; border: 1px dashed var(--chip-border); }
-.slot.gap { margin-left: 5px; }
 .st-row .rate { display: flex; align-items: center; gap: 6px; }
 .st-row .track { flex: 1; height: 5px; border-radius: 3px; background: var(--chip-border); overflow: hidden; }
 .st-row .track span { display: block; height: 100%; background: var(--accent); }
