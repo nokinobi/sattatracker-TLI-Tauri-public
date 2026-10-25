@@ -186,6 +186,7 @@
           tabindex="0"
           @click="openStrategy(f.raw, f.stage)"
           @keydown.enter.self.prevent="openStrategy(f.raw, f.stage)"
+          @keydown.space.self.prevent="openStrategy(f.raw, f.stage)"
         >
           <span class="mono rank">{{ f.rank }}</span>
           <span class="who">
@@ -226,6 +227,7 @@
           tabindex="0"
           @click="openStrategy(r.raw, stage)"
           @keydown.enter.self.prevent="openStrategy(r.raw, stage)"
+          @keydown.space.self.prevent="openStrategy(r.raw, stage)"
         >
           <span class="mono rank">{{ r.rank }}</span>
           <span class="who">
@@ -380,6 +382,9 @@ async function load() {
     shownFor.value = forQuery;
     board.value = b.data;
     tags.value = t.data;
+    // A page restored from the last run can be past the end once the results shrink.
+    const lastPage = Math.max(1, Math.ceil(b.data.total / PAGE_SIZE));
+    if (page.value > lastPage) page.value = lastPage;
     baseTags.value = base.data;
     seasonId.value = b.data.seasonId;
     stale.value = b.stale || t.stale;

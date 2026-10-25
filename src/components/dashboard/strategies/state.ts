@@ -139,20 +139,27 @@ export function saveClosed() {
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 function persist() {
   if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    const data: Saved = {
-      stage: stage.value, timemark: timemark.value, sort: sort.value, minCount: minCount.value, page: page.value,
-      itemQuery: itemQuery.value, picks: { ...picks }, mechPicks: { ...mechPicks },
-      selected: selected.value, selectedStage: selectedStage.value,
-      showFavorites: showFavorites.value, detailView: detailView.value,
-    };
-    try {
-      localStorage.setItem(STATE_KEY, JSON.stringify(data));
-    } catch {
-      // Restoring the tab is a convenience; ignore storage errors.
-    }
-  }, 300);
+  saveTimer = setTimeout(saveNow, 300);
 }
+
+function saveNow() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = null;
+  const data: Saved = {
+    stage: stage.value, timemark: timemark.value, sort: sort.value, minCount: minCount.value, page: page.value,
+    itemQuery: itemQuery.value, picks: { ...picks }, mechPicks: { ...mechPicks },
+    selected: selected.value, selectedStage: selectedStage.value,
+    showFavorites: showFavorites.value, detailView: detailView.value,
+  };
+  try {
+    localStorage.setItem(STATE_KEY, JSON.stringify(data));
+  } catch {
+    // Restoring the tab is a convenience; ignore storage errors.
+  }
+}
+
+// Don't lose a change made just before the window closes.
+window.addEventListener('pagehide', () => { if (saveTimer) saveNow(); });
 
 watch(
   [stage, timemark, sort, minCount, page, itemQuery, () => JSON.stringify(picks), () => JSON.stringify(mechPicks),
