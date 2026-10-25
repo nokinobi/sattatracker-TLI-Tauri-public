@@ -394,13 +394,11 @@ const summary = computed(() => {
 const detailCells = computed(() => {
   const r = selected.value;
   if (!r) return [];
-  const perHour = r.durationSec > 0 ? (r.profit / r.durationSec) * 3600 : 0;
   return [
     { label: 'Time', value: fmtDur(r.durationSec), tone: '' },
     { label: 'Profit', value: fmtFE(r.profit), tone: r.profit >= 0 ? 'pos' : 'neg' },
-    { label: 'Per hour', value: fmtFE(perHour), tone: perHour >= 0 ? 'pos' : 'neg' },
     { label: 'Loot', value: fmtValue(r.lootValue), tone: 'gold' },
-    { label: 'Cost', value: r.expenseValue > 0 ? '−' + fmtValue(r.expenseValue) : '0', tone: r.expenseValue > 0 ? 'neg' : '' },
+    { label: 'Cost', value: r.expenseValue > 0 ? '−' + fmtValue(r.expenseValue) : '0', tone: r.expenseValue > 0 ? 'cost' : '' },
   ];
 });
 
@@ -526,8 +524,12 @@ function onChartMove(e: MouseEvent) {
 .ss-title-row h2 { margin: 0; font-size: 16px; font-weight: 700; color: var(--strong); }
 .ss-title-row .when { margin-left: auto; font-size: 11px; color: var(--label); }
 .live-pill { font-size: 10px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--accent-bg); border: 1px solid var(--accent-border); color: var(--accent-text); }
-.ss-cells { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.ss-cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .ss-cells .val { font-size: 14px; font-weight: 700; color: var(--strong); }
+.ss-cells .val.pos, .ss-summary .val.pos { color: var(--pos); }
+.ss-cells .val.neg, .ss-summary .val.neg { color: var(--neg); }
+.ss-cells .val.gold { color: var(--gold); }
+.ss-cells .val.cost { color: var(--neg-soft); }
 .ss-detail-body { flex: 1; min-height: 0; padding: 12px 18px; display: flex; flex-direction: column; gap: 8px; }
 .ss-chart { padding: 6px; }
 .ss-none { font-size: 12px; color: var(--label); }
