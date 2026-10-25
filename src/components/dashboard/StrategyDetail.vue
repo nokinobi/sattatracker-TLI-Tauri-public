@@ -8,6 +8,10 @@
       <div class="title-row">
         <h2>{{ title }}</h2>
         <span class="muted">{{ areaName(row.mapLabel) }} · {{ timeName(row.timeLabel) }}</span>
+        <div class="dash-seg sd-views" role="group" aria-label="Detail view">
+          <button :class="{ on: view === 'loot' }" @click="view = 'loot'">Loot & cost</button>
+          <button :class="{ on: view === 'talents' }" @click="view = 'talents'">Talent trees</button>
+        </div>
       </div>
       <div class="tags">
         <span v-for="t in tagChips" :key="t.kind + t.label" :class="['tag', t.kind]">{{ t.label }}</span>
@@ -32,17 +36,12 @@
           <div class="line total"><span>Profit</span><span :class="['mono', perMap.profit >= 0 ? 'pos' : 'neg']">{{ fmtFE(perMap.profit) }}</span></div>
           <div class="note">Reported average was {{ fmtFE(row.avgEarnings) }} per map. Prices moved since these maps were run.</div>
         </div>
-
-        <div class="talents">
-          <div class="dash-label">Main talents ({{ talents.length }})</div>
-          <div v-for="t in talents" :key="t.key" class="talent">
-            <span class="mono n">×{{ t.count }}</span>
-            <span>{{ t.text }}</span>
-          </div>
-        </div>
       </div>
 
-      <div class="sd-col dash-scroll">
+      <div v-if="view === 'talents'" class="sd-trees dash-scroll">
+        <TalentTrees :talents="detail.talents" />
+      </div>
+      <div v-if="view === 'loot'" class="sd-col dash-scroll">
         <div class="col-head"><span class="dash-label">Cost per map ({{ cost.length }})</span><span class="dash-label">FE</span></div>
         <div v-for="c in cost" :key="c.id" class="item">
           <span class="dash-icon"><img :src="getIcon(c.id)" alt="" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" /></span>
@@ -50,7 +49,7 @@
           <span class="mono neg strong">{{ c.value }}</span>
         </div>
       </div>
-      <div class="sd-col dash-scroll">
+      <div v-if="view === 'loot'" class="sd-col dash-scroll">
         <div class="col-head"><span class="dash-label">Top loot per map ({{ shownLoot.length }} of {{ loot.length }})</span><span class="dash-label">FE</span></div>
         <div v-for="l in shownLoot" :key="l.id" class="item">
           <span class="dash-icon"><img :src="getIcon(l.id)" alt="" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" /></span>
@@ -67,8 +66,9 @@
 import { computed, onMounted, ref } from 'vue';
 import { getIcon } from '../../utils/assets';
 import { fmtDur, fmtFE, fmtPrice } from './format';
+import TalentTrees from './TalentTrees.vue';
 import {
-  areaName, fetchDetail, itemInfo, stageName, talentText, timeName, treeList, treeName,
+  areaName, fetchDetail, itemInfo, stageName, timeName, treeList, treeName,
   type DetailData, type ItemInfo, type ItemQty, type StrategyRow,
 } from './strategies/api';
 
@@ -81,6 +81,7 @@ const detail = ref<DetailData | null>(null);
 const failed = ref(false);
 const info = ref(new Map<string, ItemInfo>());
 const allLoot = ref(false);
+const view = ref<'loot' | 'talents'>('loot');
 
 onMounted(async () => {
   const d = await fetchDetail(props.stage, props.row.key);
@@ -136,11 +137,6 @@ const stats = computed(() => [
   { label: 'Loot items', value: String(detail.value?.items.loot.length ?? 0), tone: '' },
 ]);
 
-const talents = computed(() =>
-  (detail.value?.talents ?? [])
-    .map(t => ({ key: t.key, count: t.count, text: talentText(t.key) }))
-    .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text)),
-);
 
 const tagChips = computed(() => {
   const chips: { kind: string; label: string }[] = [
@@ -189,10 +185,9 @@ const tagChips = computed(() => {
 .today .total .mono { font-size: 15px; }
 .today .rule { height: 1px; background: var(--accent-border); }
 .today .note { font-size: 10.5px; color: var(--muted); }
-.talents { display: flex; flex-direction: column; gap: 5px; }
-.talent { display: flex; gap: 8px; font-size: 11px; line-height: 1.35; color: var(--text); }
-.talent .n { flex-shrink: 0; width: 24px; font-size: 10px; color: var(--label); }
 
+.sd-views { margin-left: auto; }
+.sd-trees { grid-column: span 2; padding: 14px 16px; min-height: 0; }
 .sd-col { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
 .sd-col + .sd-col { border-left: 1px solid var(--line); }
 .col-head { display: flex; justify-content: space-between; }
