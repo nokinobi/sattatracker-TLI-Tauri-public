@@ -11,8 +11,8 @@
         <button
           :class="['dash-btn', 'sd-fav', { on: !!fav }]"
           :aria-pressed="!!fav"
-          :disabled="!fav && favoritesFull"
-          :title="!fav && favoritesFull ? 'Favorites are full' : ''"
+          :disabled="!fav && (favoritesFull || !seasonId)"
+          :title="!fav && favoritesFull ? 'Favorites are full' : !fav && !seasonId ? 'Loading the season…' : ''"
           @click="toggleFavorite(row, stage, seasonId)"
         >
           <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5l1.9 4.1 4.4.5-3.3 3 .9 4.4L8 11.3l-3.9 2.2.9-4.4-3.3-3 4.4-.5z" /></svg>
@@ -178,7 +178,11 @@ function onNote(e: Event) {
   if (noteTimer) clearTimeout(noteTimer);
   noteTimer = setTimeout(flushNote, 400);
 }
-onUnmounted(flushNote);
+onMounted(() => window.addEventListener('pagehide', flushNote));
+onUnmounted(() => {
+  window.removeEventListener('pagehide', flushNote);
+  flushNote();
+});
 
 onMounted(async () => {
   const d = await fetchDetail(props.stage, props.row.key);
