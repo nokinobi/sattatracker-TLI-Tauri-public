@@ -19,8 +19,9 @@ One small, click-through window with profit per hour, the current map's profit a
 
 - **Click-through:** clicks pass through the window to the game. The only clickable part is the small round handle on the top-right corner.
 - **Move:** drag the handle.
-- **Configure:** click the handle. The window gets a dashed outline, a resize grip in the bottom-right corner, and a panel with **Opacity** (30–100%, background only) and **Text size** (80–150%). The panel opens below the window, or above it when the window sits too low on the screen for it to fit. Click **Done** or the handle again to finish.
-- **Resize:** only the loot list grows or shrinks; the top row always stays. A narrow window shrinks the numbers to fit.
+- **Configure:** click the handle. The window gets a dashed outline, a resize grip in the bottom-right corner, and a panel with **Opacity** (30–100%, background only) and **Text size** (80–150%). It also has the **High-value drop** settings (see below). The panel opens below the window, or above it when the window sits too low on the screen for it to fit. Click **Done** or the handle again to finish.
+- **Resize height:** only the loot list grows or shrinks; the top row always stays. The edge snaps to "top row only" and "top row plus the Loot bar".
+- **Resize width:** narrowing the window drops the top-row blocks one at a time, each with a snap point: first the **Map** timer, then **Profit / hr**. **Map profit** always stays; its width is the narrowest the window goes. In the narrowest layout the loot rows show only icon and value, and the Loot bar shows just the count.
 
 ![Configure mode](img/compact-window/configure.png)
 
@@ -32,13 +33,24 @@ When not all items fit, the Loot bar shows an eye icon with `+N more · hover to
 
 The list opens below the window if it fits, otherwise above, otherwise beside it (towards the middle of the screen), and always stays inside the screen. It stays open while the cursor is over the hint, the window or the list.
 
+## High-value drop
+
+A drop worth at least the **High-value drop** amount (100 FE by default, after tax if tax is on) is marked with a gold diamond and a gold row for the rest of the map, and plays the chosen effect once:
+
+- **Window glow:** the window's border flashes gold.
+- **Profit pop:** Map profit pops and glows gold, and a `+N FE` tag floats up over it.
+- **Both** (default): border flash and profit pop together.
+- **Off:** no effect; the row is still marked.
+
+Set the amount to 0 to turn marking off as well.
+
 ## Settings saved
 
-Position, size, opacity and text size are kept between runs (`compactWindow`, `compactWindowOpacity` and `compactWindowFontScale` in the tracker's saved settings).
+Position, size, opacity, text size and the high-value drop settings are kept between runs (`compactWindow`, `compactWindowOpacity`, `compactWindowFontScale`, `compactHighValueThreshold` and `compactHighValueEffect` in the tracker's saved settings).
 
 ## Code
 
-- `src/components/CompactWindow.vue`: the window, configure mode and hover list.
+- `src/components/CompactWindow.vue`: the window, configure mode, hover list, width snap points and high-value drop effects.
 - `src/stores/trackerStore.ts`: saved settings.
 - `src/components/BuilderPanel.vue`: the F8 menu checkbox.
 - `src/App.vue`: mounts the window.
