@@ -7,6 +7,7 @@ mod net;
 mod parser;
 mod pricing;
 mod state_store;
+mod strategy;
 mod tailer;
 mod utils;
 
@@ -65,7 +66,22 @@ fn get_cursor_position(window: tauri::Window) -> (f64, f64) {
 struct PriceEntry {
     item_id: String,
     item_name: String,
+    item_type: String,
     price: f64,
+}
+
+#[derive(serde::Serialize)]
+struct PriceStatus {
+    count: usize,
+    last_refresh_ms: i64,
+}
+
+#[tauri::command]
+fn get_price_status() -> PriceStatus {
+    PriceStatus {
+        count: crate::pricing::get_all_cached_prices().len(),
+        last_refresh_ms: crate::pricing::last_refresh_ms(),
+    }
 }
 
 #[tauri::command]
@@ -75,9 +91,11 @@ fn get_all_prices() -> Vec<PriceEntry> {
         .filter(|(_, p)| *p > 0.0)
         .map(|(id, price)| {
             let item_name = crate::db::DbManager::get_item_name(&id);
+            let item_type = crate::db::DbManager::get_item_type(&id);
             PriceEntry {
                 item_id: id,
                 item_name,
+                item_type,
                 price,
             }
         })
@@ -125,6 +143,9 @@ pub fn run() {
                     if shortcut.matches(Modifiers::empty(), Code::F8) {
                         let _ = app.emit("toggle_edit_mode", ());
                     }
+                    if shortcut.matches(Modifiers::empty(), Code::F6) {
+                        let _ = app.emit("toggle_dashboard", ());
+                    }
                     if shortcut.matches(Modifiers::empty(), Code::F7) {
                         if let Some(window) = app.get_webview_window("main") {
                             let visible = window.is_visible().unwrap_or(true);
@@ -163,6 +184,9 @@ pub fn run() {
                 let _ = app.global_shortcut().register(shortcut);
             }
             if let Ok(shortcut) = Shortcut::from_str("F7") {
+                let _ = app.global_shortcut().register(shortcut);
+            }
+            if let Ok(shortcut) = Shortcut::from_str("F6") {
                 let _ = app.global_shortcut().register(shortcut);
             }
 
@@ -216,8 +240,11 @@ pub fn run() {
             get_log_path,
             get_cursor_position,
             get_all_prices,
+            get_price_status,
             state_store::save_state,
             state_store::load_state,
+            strategy::strategy_api,
+            strategy::get_item_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
