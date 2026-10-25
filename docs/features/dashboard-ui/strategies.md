@@ -75,7 +75,7 @@ The data has totals per strategy, not single maps, so the loot can't be split by
 
 ## Data and privacy
 
-- Requests go through the tracker's back end to the strategy server's read-only endpoints. Answers are kept for 5 minutes (strategy details for 30), and saved answers are shown when the server fails.
+- Requests go through the tracker's back end to the strategy server's read-only endpoints. Answers are kept for 5 minutes (strategy details for 30), and saved answers up to 2 hours old are shown when the server fails. The saved answers take at most 32 MB and 300 entries; the oldest go first.
 - Player names and IDs are removed from every answer before it reaches the window.
 - There are two strategy servers. The tracker asks the one that answered last first, and moves on to the other when a server fails or sends a web page (a bot check) instead of data.
 - Every request is written to the tracker's log, `%LOCALAPPDATA%\com.fedin.sattatracker\logs\tracker.log`: from cache or from which server, the HTTP status, the time it took, and the reason when it failed. The log rolls over at 1 MB and keeps two older files (`tracker.1.log`, `tracker.2.log`).

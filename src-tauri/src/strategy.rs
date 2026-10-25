@@ -11,6 +11,10 @@ use std::time::{Duration, Instant};
 
 const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
 const MAX_CACHE_ENTRIES: usize = 300;
+// Total size of the cached answers (as JSON text); big leaderboard pages add up quickly.
+const MAX_CACHE_BYTES: usize = 32 * 1024 * 1024;
+// Past this age an answer is no use even as a fallback when the server fails.
+const STALE_KEEP: Duration = Duration::from_secs(2 * 60 * 60);
 // Mechanics are sent as all their talent node ids (~35 × 43 chars each), so allow several.
 const MAX_PARAM_LEN: usize = 8000;
 const LIST_TTL: Duration = Duration::from_secs(5 * 60);
@@ -39,6 +43,29 @@ const PRIVATE_KEYS: [&str; 5] = [
 struct Entry {
     at: Instant,
     body: Value,
+    size: usize,
+}
+
+/// Frees space for an answer of `incoming` bytes under `key`: drops the old copy of that key,
+/// answers older than STALE_KEEP, then the oldest ones until both limits fit.
+fn make_room(cache: &mut HashMap<String, Entry>, key: &str, incoming: usize) {
+    cache.remove(key);
+    cache.retain(|_, e| e.at.elapsed() < STALE_KEEP);
+    let mut total: usize = cache.values().map(|e| e.size).sum();
+    while !cache.is_empty()
+        && (cache.len() >= MAX_CACHE_ENTRIES || total + incoming > MAX_CACHE_BYTES)
+    {
+        let Some(oldest) = cache
+            .iter()
+            .min_by_key(|(_, e)| e.at)
+            .map(|(k, _)| k.clone())
+        else {
+            break;
+        };
+        if let Some(e) = cache.remove(&oldest) {
+            total -= e.size;
+        }
+    }
 }
 
 lazy_static! {
@@ -285,21 +312,15 @@ pub async fn strategy_api(
 
     match fetch(&endpoint, &params, &what).await {
         Ok(data) => {
+            let size = data.to_string().len();
             let mut cache = CACHE.lock().unwrap();
-            if cache.len() >= MAX_CACHE_ENTRIES {
-                if let Some(oldest) = cache
-                    .iter()
-                    .min_by_key(|(_, e)| e.at)
-                    .map(|(k, _)| k.clone())
-                {
-                    cache.remove(&oldest);
-                }
-            }
+            make_room(&mut cache, &key, size);
             cache.insert(
                 key,
                 Entry {
                     at: Instant::now(),
                     body: data.clone(),
+                    size,
                 },
             );
             Ok(json!({ "data": data, "fetchedAt": now_ms, "stale": false }))
@@ -396,6 +417,46 @@ mod tests {
         .unwrap();
         assert!(a.iter().any(|(k, _)| k == "seasonId"));
         assert_eq!(cache_key("tags", &a), cache_key("tags", &b));
+    }
+
+    fn entry(age_secs: u64, size: usize) -> Entry {
+        Entry {
+            at: Instant::now() - Duration::from_secs(age_secs),
+            body: Value::Null,
+            size,
+        }
+    }
+
+    #[test]
+    fn cache_drops_answers_too_old_to_fall_back_on() {
+        let mut c = HashMap::new();
+        c.insert("old".to_string(), entry(STALE_KEEP.as_secs() + 1, 10));
+        c.insert("recent".to_string(), entry(60, 10));
+        make_room(&mut c, "new", 10);
+        assert!(!c.contains_key("old"));
+        assert!(c.contains_key("recent"));
+    }
+
+    #[test]
+    fn cache_stays_under_its_byte_budget() {
+        let mut c = HashMap::new();
+        let big = MAX_CACHE_BYTES / 3;
+        c.insert("a".to_string(), entry(30, big));
+        c.insert("b".to_string(), entry(20, big));
+        c.insert("c".to_string(), entry(10, big));
+        make_room(&mut c, "d", big);
+        // The oldest goes first, and only as much as needed.
+        assert!(!c.contains_key("a"));
+        assert!(c.contains_key("b") && c.contains_key("c"));
+        assert!(c.values().map(|e| e.size).sum::<usize>() + big <= MAX_CACHE_BYTES);
+    }
+
+    #[test]
+    fn cache_replaces_its_own_key() {
+        let mut c = HashMap::new();
+        c.insert("k".to_string(), entry(10, MAX_CACHE_BYTES - 5));
+        make_room(&mut c, "k", MAX_CACHE_BYTES - 5);
+        assert!(c.is_empty());
     }
 
     #[test]

@@ -150,7 +150,7 @@
         <div v-if="error && board && !showFavorites" class="st-failed" role="alert">
           <span>Couldn't load {{ heading.toLowerCase() }}{{ retrying ? ', trying again…' : '.' }} {{ error }}</span>
           <span v-if="shownFor !== query" class="faint">The list below still shows the previous results.</span>
-          <button v-if="!retrying" class="st-link" @click="load">Retry</button>
+          <button v-if="!retrying" class="st-link" @click="load()">Retry</button>
         </div>
         <div v-if="active.length && !showFavorites" class="row chips">
           <span class="faint">Filters:</span>
@@ -214,7 +214,7 @@
         <div v-if="error && !board && !retrying" class="dash-empty">
           <div>
             <div>Couldn't load strategies: {{ error }}</div>
-            <button class="dash-btn small retry" @click="load">Try again</button>
+            <button class="dash-btn small retry" @click="load()">Try again</button>
           </div>
         </div>
         <div v-else-if="!board" class="dash-empty">Loading strategies…</div>
@@ -356,7 +356,8 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null;
 const retrying = ref(false);
 const query = computed(() => JSON.stringify([stage.value, timemark.value, sort.value, minCount.value, picks, mechPicks, page.value]));
 
-async function load() {
+// boardOnly: just the leaderboard page, keeping the filter lists (used to move to the last page).
+async function load(opts: { boardOnly?: boolean } = {}) {
   if (!stage.value) {
     loading.value = false;
     return;
@@ -368,12 +369,13 @@ async function load() {
   try {
     const q = filterQuery();
     const extra = mechIn.value.slice(1);
+    const withTags = !opts.boardOnly;
     const [b, t, base] = await Promise.all([
       extra.length
         ? loadAll(q, extra)
         : strategyApi<LeaderboardData>('leaderboard', { ...q, sort: sort.value, limit: String(PAGE_SIZE), offset: String((page.value - 1) * PAGE_SIZE) }),
-      strategyApi<TagsData>('tags', q),
-      strategyApi<TagsData>('tags', { stage: stage.value, minCount: String(minCount.value) }),
+      withTags ? strategyApi<TagsData>('tags', q) : null,
+      withTags ? strategyApi<TagsData>('tags', { stage: stage.value, minCount: String(minCount.value) }) : null,
     ]);
     if (gen !== generation) return;
     localPages.value = extra.length > 0;
@@ -381,15 +383,19 @@ async function load() {
     retrying.value = false;
     shownFor.value = forQuery;
     board.value = b.data;
-    tags.value = t.data;
-    // A page restored from the last run can be past the end once the results shrink.
-    const lastPage = Math.max(1, Math.ceil(b.data.total / PAGE_SIZE));
-    if (page.value > lastPage) page.value = lastPage;
-    baseTags.value = base.data;
+    if (t) tags.value = t.data;
+    if (base) baseTags.value = base.data;
     seasonId.value = b.data.seasonId;
-    stale.value = b.stale || t.stale;
-    fetchedAt.value = Math.min(b.fetchedAt, t.fetchedAt);
-    void nameCostItems(t.data);
+    stale.value = b.stale || !!t?.stale;
+    fetchedAt.value = t ? Math.min(b.fetchedAt, t.fetchedAt) : b.fetchedAt;
+    if (t) void nameCostItems(t.data);
+    // A page restored from the last run can be past the end once the results shrink: move to
+    // the last page, fetching only that page (see watch(page)).
+    const lastPage = Math.max(1, Math.ceil(b.data.total / PAGE_SIZE));
+    if (page.value > lastPage) {
+      clampingPage = true;
+      page.value = lastPage;
+    }
   } catch (e) {
     if (gen !== generation) return;
     error.value = String(e);
@@ -575,7 +581,14 @@ watch([stage, timemark, sort, minCount, () => JSON.stringify(picks), () => JSON.
   page.value = 1;
   scheduleLoad();
 });
+let clampingPage = false;
 watch(page, () => {
+  if (clampingPage) {
+    clampingPage = false;
+    if (!localPages.value) void load({ boardOnly: true });
+    else shownFor.value = query.value;
+    return;
+  }
   if (!localPages.value) return scheduleLoad();
   shownFor.value = query.value;
 });
