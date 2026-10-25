@@ -1,6 +1,6 @@
 # Dashboard
 
-One window with tabs (Overview, Session, Inventory and Prices) for the current session, past sessions, your bag and market prices.
+One window with tabs (Overview, Session, Inventory, Prices and Strategies) for the current session, past sessions, your bag, market prices and the community's best farming strategies.
 
 ![Dashboard, Overview tab](dashboard-ui/img/overview.png)
 
@@ -10,6 +10,7 @@ One window with tabs (Overview, Session, Inventory and Prices) for the current s
 - [Session](dashboard-ui/session.md): every map of the current, a saved or all sessions, and cleanup of saved sessions.
 - [Inventory](dashboard-ui/inventory.md): search your bag and see what it is worth.
 - [Prices](dashboard-ui/prices.md): every known price, grouped by item type.
+- [Strategies](dashboard-ui/strategies.md): the community strategy ladder with filters, costs, loot and talent trees.
 
 The images in these pages are rendered from the dashboard design with sample data, so numbers and names differ from a real session.
 
@@ -53,6 +54,6 @@ Changes apply right away and are kept between runs (`dashboardTheme` and `dashbo
 - `src/components/dashboard/format.ts`: number and time formatting.
 - `src/App.vue`: mounts the window and opens it on F6.
 - `src/stores/trackerStore.ts`: saved theme and text size, saving, discarding and deleting sessions.
-- `src-tauri/src/lib.rs`: the F6 shortcut, item types in `get_all_prices` and the `get_price_status` command.
+- `src-tauri/src/lib.rs`: the F6 shortcut, item types in `get_all_prices`, the `get_price_status` command and the strategy commands.
 
 Each page lists the files behind its tab.
