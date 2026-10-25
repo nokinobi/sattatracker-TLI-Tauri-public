@@ -131,7 +131,7 @@ const perMap = computed(() => {
 const stats = computed(() => [
   { label: 'Maps', value: String(props.row.count), tone: '' },
   { label: 'Reported FE / map', value: fmtFE(props.row.avgEarnings), tone: 'gold' },
-  { label: 'FE / hour', value: fmtValue(props.row.avgEfficiency * 60), tone: 'pos' },
+  { label: 'Profit / hour', value: fmtValue(props.row.avgEfficiency * 60), tone: 'pos' },
   { label: 'Avg map time', value: fmtDur(props.row.avgDuration / 1000), tone: '' },
   { label: 'Loot items', value: String(detail.value?.items.loot.length ?? 0), tone: '' },
   { label: 'Cost items', value: String(detail.value?.items.cost.length ?? 0), tone: '' },

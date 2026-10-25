@@ -96,7 +96,7 @@
 
       <div :class="['st-progress', { on: loading }]" role="progressbar" aria-label="Loading strategies" :aria-hidden="!loading"><span></span></div>
       <div class="st-head">
-        <span>#</span><span>Strategy</span><span>FE / hour</span><span class="r">Maps</span><span class="r">FE / map</span><span class="r">Time</span>
+        <span>#</span><span>Strategy</span><span>Profit / hour</span><span class="r">Maps</span><span class="r">FE / map</span><span class="r">Time</span>
       </div>
       <div class="st-list dash-scroll">
         <div v-if="error && !board" class="dash-empty">
@@ -162,7 +162,7 @@ const FACET_ROWS = 8;
 const COMPASS_SLOTS = 4;
 const ASTROLABE_SLOTS = 2;
 const SORTS = [
-  { value: 'avgEfficiency', label: 'FE / hour' },
+  { value: 'avgEfficiency', label: 'Profit / hour' },
   { value: 'totalCount', label: 'Maps' },
 ];
 const FACETS: { type: FacetType; title: string; single: boolean }[] = [
