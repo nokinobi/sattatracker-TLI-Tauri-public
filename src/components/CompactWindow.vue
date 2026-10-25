@@ -188,19 +188,18 @@
         <span class="w-[36px] text-right text-[12px]" style="color: #e4e4e7;">{{ Math.round(fs * 100) }}%</span>
       </div>
       <div class="h-px" style="background: rgba(255,255,255,0.08);" />
-      <div class="flex items-center gap-[6px] text-[12px]" style="color: #e4e4e7;">
-        <label for="compact-window-high-value" class="font-semibold" style="color: #fbbf24;">High-value drop</label>
-        <span class="ml-auto">≥</span>
+      <div class="flex items-center gap-[10px]">
+        <label for="compact-window-high-value" class="text-[12px] font-semibold whitespace-nowrap" style="color: #fbbf24;">High-value drop</label>
         <input
           id="compact-window-high-value"
-          type="text" inputmode="numeric" maxlength="6"
-          :value="store.compactHighValueThreshold"
-          @change="onThreshold"
-          @focus="($event.target as HTMLInputElement).select()"
-          class="w-[56px] px-[6px] py-[2px] rounded-[5px] text-center font-semibold"
-          style="font-family: Consolas, monospace; color: #f4f4f5; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18);"
+          type="range" min="0" :max="THRESHOLD_STEPS.length - 1" step="1"
+          :value="thresholdIndex"
+          :aria-valuetext="thresholdLabel"
+          @input="onThreshold"
+          class="flex-1 min-w-0"
+          style="accent-color: #fbbf24;"
         />
-        <span>FE</span>
+        <span class="w-[64px] text-right text-[12px] whitespace-nowrap" style="color: #e4e4e7;">{{ thresholdLabel }}</span>
       </div>
       <div role="group" aria-label="High-value drop effect" class="flex gap-[2px] p-[2px] rounded-[7px]" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12);">
         <button
@@ -309,6 +308,9 @@ const EFFECTS: { id: HighValueEffect; label: string }[] = [
   { id: 'off',  label: 'Off' },
 ];
 const FX_MS = 2600;
+// The overlay never takes keyboard focus from the game, so the threshold is a slider over
+// fixed steps instead of a text field. 0 turns marking and effects off.
+const THRESHOLD_STEPS = [0, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
 
 const PANEL_GAP    = 6;
 const CFG_GAP      = 8;
@@ -623,11 +625,21 @@ function onFontScale(e: Event) {
   store.saveConfigToStorage();
 }
 
+const thresholdIndex = computed(() => {
+  const value = store.compactHighValueThreshold;
+  let best = 0;
+  THRESHOLD_STEPS.forEach((step, i) => {
+    if (Math.abs(step - value) < Math.abs(THRESHOLD_STEPS[best] - value)) best = i;
+  });
+  return best;
+});
+const thresholdLabel = computed(() => {
+  const value = THRESHOLD_STEPS[thresholdIndex.value];
+  return value === 0 ? 'Off' : `≥ ${value} FE`;
+});
+
 function onThreshold(e: Event) {
-  const el = e.target as HTMLInputElement;
-  const value = Math.max(0, Math.round(Number(el.value.replace(/[^0-9.]/g, '')) || 0));
-  store.compactHighValueThreshold = value;
-  el.value = String(value);
+  store.compactHighValueThreshold = THRESHOLD_STEPS[Number((e.target as HTMLInputElement).value)] ?? 100;
   store.saveConfigToStorage();
 }
 

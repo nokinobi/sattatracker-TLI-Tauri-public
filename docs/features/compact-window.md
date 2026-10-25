@@ -45,14 +45,14 @@ The list opens below the window if it fits, otherwise above, otherwise beside it
 
 ## High-value drop
 
-A drop worth at least the **High-value drop** amount (100 FE by default, after tax if tax is on) is marked with a gold diamond and a gold row for the rest of the map, and plays the chosen effect once:
+A drop worth at least the **High-value drop** amount (100 FE by default, after tax if tax is on; a drop's worth is price × quantity) is marked with a gold diamond and a gold row for the rest of the map, and plays the chosen effect once:
 
 - **Window glow:** the window's border flashes gold.
 - **Profit pop:** Map profit pops and glows gold, and a `+N FE` tag floats up over it.
 - **Both** (default): border flash and profit pop together.
 - **Off:** no effect; the row is still marked.
 
-Set the amount to 0 to turn marking off as well.
+The amount is a slider with steps: Off, 10, 20, 50, 100, 200, 500, 1000, 2000 and 5000 FE. It's a slider rather than a text field because the overlay never takes keyboard focus from the game. **Off** turns the marking off as well.
 
 ![A 505 FE drop with Both: gold border, Map profit pop with the +505 FE tag, marked row](img/compact-window/high-value-drop.png)
 
