@@ -185,11 +185,17 @@ const liveRow = computed<Row | null>(() => {
   };
 });
 
-const sessionOptions = computed(() =>
-  [...store.archivedSessions]
+const sessionOptions = computed(() => {
+  const counts = new Map<string, number>();
+  store.mapHistory.forEach(m => counts.set(m.sessionId, (counts.get(m.sessionId) ?? 0) + 1));
+  return [...store.archivedSessions]
     .sort((a, b) => b.startedAt - a.startedAt)
-    .map(s => ({ id: s.id, label: `${fmtWhen(s.startedAt)} · ${s.maps} maps · ${fmtFE(s.profit)} FE` })),
-);
+    .map(s => {
+      const maps = counts.get(s.id) ?? s.maps;
+      const stats = `${fmtWhen(s.startedAt)} · ${maps} ${maps === 1 ? 'map' : 'maps'} · ${fmtFE(s.profit)} FE`;
+      return { id: s.id, label: s.name ? `${s.name} · ${stats}` : stats };
+    });
+});
 
 const rows = computed<Row[]>(() => {
   let list: Row[];

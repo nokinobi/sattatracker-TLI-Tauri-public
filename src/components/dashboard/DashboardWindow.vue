@@ -107,12 +107,29 @@
         <div class="dash-confirm-box">
           <div class="title">Start a new session?</div>
           <p>
-            The current session ({{ store.sessionMapCount }} maps, {{ fmtFE(store.totalProfit) }} FE) is saved
-            and stays available in the Session tab.
+            Current session: {{ mapsLabel }} · {{ fmtFE(store.totalProfit) }} FE · {{ store.formattedSessionTimer }},
+            started {{ fmtWhen(store.sessionStartedAt) }}.
+          </p>
+          <label class="name-field">
+            <span class="dash-label">Session name (optional)</span>
+            <input
+              ref="nameInput"
+              v-model="sessionName"
+              :maxlength="MAX_SESSION_NAME"
+              :placeholder="`e.g. Glacial Abyss T8, ${fmtWhen(store.sessionStartedAt)}`"
+              @keydown.enter="startNewSession(true)"
+            />
+          </label>
+          <p class="hint">
+            Saved sessions stay in the Session tab under their name.
+            Discarding deletes this session's {{ mapsLabel }} for good.
           </p>
           <div class="actions">
             <button class="dash-btn" @click="confirmReset = false">Cancel</button>
-            <button class="dash-btn primary" @click="startNewSession">Save and start new</button>
+            <button :class="['dash-btn', 'danger', { armed: discardArmed }]" @click="discard">
+              {{ discardArmed ? `Delete ${mapsLabel}?` : 'Discard and start new' }}
+            </button>
+            <button class="dash-btn primary" @click="startNewSession(true)">Save and start new</button>
           </div>
         </div>
       </div>
@@ -121,10 +138,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { useTrackerStore } from '../../stores/trackerStore';
-import { fmtFE } from './format';
+import { MAX_SESSION_NAME } from '../../types/history';
+import { fmtFE, fmtWhen } from './format';
 import OverviewTab from './OverviewTab.vue';
 import SessionTab from './SessionTab.vue';
 import InventoryTab from './InventoryTab.vue';
@@ -140,10 +158,18 @@ const tab = ref<TabId>('overview');
 const focusMapId = ref('');
 const confirmReset = ref(false);
 const showSettings = ref(false);
+const sessionName = ref('');
+const discardArmed = ref(false);
+const nameInput = ref<HTMLInputElement | null>(null);
+
+const sessionMaps = computed(() =>
+  store.mapHistory.filter(m => m.sessionId === store.sessionId).length + (store.currentMapMeta ? 1 : 0),
+);
+const mapsLabel = computed(() => `${sessionMaps.value} ${sessionMaps.value === 1 ? 'map' : 'maps'}`);
 
 const tabs = computed(() => [
   { id: 'overview' as TabId, label: 'Overview', badge: '' },
-  { id: 'session' as TabId, label: 'Session', badge: store.sessionMapCount ? String(store.sessionMapCount) : '' },
+  { id: 'session' as TabId, label: 'Session', badge: sessionMaps.value ? String(sessionMaps.value) : '' },
   { id: 'inventory' as TabId, label: 'Inventory', badge: '' },
   { id: 'prices' as TabId, label: 'Prices', badge: '' },
 ]);
@@ -186,10 +212,24 @@ function openMap(id: string) {
   tab.value = 'session';
 }
 
-function startNewSession() {
-  store.resetSession();
+function startNewSession(save: boolean) {
+  store.resetSession({ save, name: sessionName.value });
   confirmReset.value = false;
 }
+
+function discard() {
+  if (!discardArmed.value) {
+    discardArmed.value = true;
+    return;
+  }
+  startNewSession(false);
+}
+
+watch(confirmReset, (open) => {
+  sessionName.value = '';
+  discardArmed.value = false;
+  if (open) void nextTick(() => nameInput.value?.focus());
+});
 
 watch(() => props.isOpen, (open) => {
   if (open) void checkLog();
@@ -302,6 +342,9 @@ watch(() => props.isOpen, (open) => {
 .dash-btn:hover { border-color: var(--accent-border); }
 .dash-btn.icon { width: 32px; padding: 0; justify-content: center; }
 .dash-btn.primary { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-text); }
+.dash-btn.danger { color: var(--neg); }
+.dash-btn.danger:hover, .dash-btn.danger.armed { border-color: var(--neg); }
+.dash-btn.danger.armed { background: var(--neg); color: #fff; }
 
 .dash-seg { display: flex; padding: 2px; border-radius: 8px; background: var(--input); border: 1px solid var(--chip-border); }
 .dash-seg button { min-width: 28px; height: 26px; padding: 0 9px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: none; background: transparent; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; }
@@ -347,8 +390,13 @@ watch(() => props.isOpen, (open) => {
 .dash-settings .note { font-size: 10px; color: var(--label); }
 
 .dash-confirm { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); }
-.dash-confirm-box { width: 360px; padding: 18px; border-radius: 14px; background: var(--bg); border: 1px solid var(--border); box-shadow: var(--shadow); }
+.dash-confirm-box { width: 460px; padding: 18px; border-radius: 14px; background: var(--bg); border: 1px solid var(--border); box-shadow: var(--shadow); }
 .dash-confirm-box .title { font-size: 15px; font-weight: 700; color: var(--strong); }
 .dash-confirm-box p { font-size: 12px; line-height: 1.5; color: var(--muted); margin: 8px 0 16px; }
 .dash-confirm-box .actions { display: flex; justify-content: flex-end; gap: 8px; }
+.dash-confirm-box .name-field { display: flex; flex-direction: column; gap: 6px; }
+.dash-confirm-box .name-field input { padding: 8px 10px; border-radius: 8px; font-size: 13px; font-family: inherit; background: var(--input); border: 1px solid var(--chip-border); color: var(--strong); outline: none; }
+.dash-confirm-box .name-field input:focus { border-color: var(--accent-border); }
+.dash-confirm-box .name-field input::placeholder { color: var(--label); }
+.dash-confirm-box p.hint { font-size: 11px; margin: 10px 0 16px; color: var(--label); }
 </style>
