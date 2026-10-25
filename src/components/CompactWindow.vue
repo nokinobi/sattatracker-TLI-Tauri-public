@@ -124,8 +124,13 @@
 
     <div
       v-if="cfg"
-      class="mt-2 px-[10px] py-2 rounded-md flex flex-col gap-[6px]"
-      style="background: rgba(16,16,20,0.96); border: 1px solid rgba(96,165,250,0.5);"
+      ref="cfgRef"
+      class="absolute left-0 right-0 px-[10px] py-2 rounded-md flex flex-col gap-[6px]"
+      :style="{
+        ...(cfgAbove ? { bottom: `calc(100% + ${CFG_GAP}px)` } : { top: `calc(100% + ${CFG_GAP}px)` }),
+        background: 'rgba(16,16,20,0.96)',
+        border: '1px solid rgba(96,165,250,0.5)',
+      }"
     >
       <div class="flex items-center gap-[10px]">
         <label for="compact-window-opacity" class="text-[12px] font-semibold" style="color: #e4e4e7;">Opacity</label>
@@ -213,7 +218,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { useTrackerStore } from '../stores/trackerStore';
 import { getIcon } from '../utils/assets';
 import { cursorX, cursorY, updateCursor } from '../utils/cursor';
@@ -224,6 +229,7 @@ const RESIZE_SNAP = 12;
 const MAX_W     = 640;
 
 const PANEL_GAP    = 6;
+const CFG_GAP      = 8;
 const SCREEN_PAD   = 8;
 const HOVER_POLL   = 60;
 
@@ -242,6 +248,7 @@ const barRef   = ref<HTMLElement | null>(null);
 const boxRef   = ref<HTMLElement | null>(null);
 const hintRef  = ref<HTMLElement | null>(null);
 const panelRef = ref<HTMLElement | null>(null);
+const cfgRef   = ref<HTMLElement | null>(null);
 
 const x = ref(60);
 const y = ref(120);
@@ -256,6 +263,22 @@ const barH     = ref(20);
 
 const isVisible   = computed(() => store.widgetPositions.compactWindow?.show !== false);
 const configuring = computed(() => cfg.value || store.isEditMode);
+
+// The settings panel opens below the window, or above it when the screen has no room
+// below and more room above (e.g. a window parked near the bottom edge).
+const cfgH = ref(110);
+const viewH = ref(window.innerHeight);
+const cfgAbove = computed(() => {
+  const below = viewH.value - (y.value + h.value) - CFG_GAP;
+  const above = y.value - CFG_GAP;
+  return below < cfgH.value && above > below;
+});
+watch([cfg, fs], async ([open]) => {
+  if (!open) return;
+  viewH.value = window.innerHeight;
+  await nextTick();
+  if (cfgRef.value) cfgH.value = cfgRef.value.offsetHeight;
+});
 
 const showLoot = computed(() => h.value - topH.value >= lootBar.value);
 
