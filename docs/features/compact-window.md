@@ -19,7 +19,7 @@ One small, click-through window with profit per hour, the current map's profit a
 
 - **Click-through:** clicks pass through the window to the game. The only clickable part is the small round handle on the top-right corner.
 - **Move:** drag the handle.
-- **Configure:** click the handle. The window gets a dashed outline, a resize grip in the bottom-right corner, and a panel with **Opacity** (30–100%, background only) and **Text size** (80–150%). Click **Done** or the handle again to finish.
+- **Configure:** click the handle. The window gets a dashed outline, a resize grip in the bottom-right corner, and a panel with **Opacity** (30–100%, background only) and **Text size** (80–150%). The panel opens below the window, or above it when the window sits too low on the screen for it to fit. Click **Done** or the handle again to finish.
 - **Resize:** only the loot list grows or shrinks; the top row always stays. A narrow window shrinks the numbers to fit.
 
 ![Configure mode](img/compact-window/configure.png)
