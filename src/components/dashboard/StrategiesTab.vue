@@ -2,53 +2,14 @@
   <StrategyDetail v-if="selected" :row="selected" :stage="stage" @back="selected = null" />
   <div v-else class="st">
     <aside class="st-filters" aria-label="Filters">
-      <div class="st-search">
-        <label class="dash-input">
-          <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="var(--label)" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="var(--label)" stroke-width="1.5" stroke-linecap="round"/></svg>
-          <input v-model="facetQuery" placeholder="Search filters, e.g. beacon" aria-label="Search filters" />
-        </label>
-      </div>
-      <div class="st-facets dash-scroll">
-        <div v-if="!tags && loading" class="dash-empty">Loading filters…</div>
-        <div v-for="f in facets" :key="f.type" class="st-facet">
-          <div class="head">
-            <span class="dash-label">{{ f.title }}</span>
-            <span class="note">{{ f.single ? 'one choice' : 'any' }} · {{ f.total }}</span>
-          </div>
-          <div
-            v-for="v in f.values"
-            :key="v.key"
-            :class="['st-value', v.state]"
-            role="button"
-            tabindex="0"
-            :aria-pressed="v.state === 'in'"
-            :title="v.state === 'in' ? 'Click to remove from filters' : 'Click to show only strategies with this'"
-            @click="toggle(f.type, v.key, 'in', f.single)"
-            @keydown.enter.prevent="toggle(f.type, v.key, 'in', f.single)"
-          >
-            <span class="bar" :style="{ width: Math.min(100, v.share * 2) + '%' }"></span>
-            <span class="label">{{ v.label }}</span>
-            <span class="mono share">{{ v.share.toFixed(1) }}%</span>
-            <button
-              :class="['exc', { on: v.state === 'out' }]"
-              aria-label="Exclude"
-              title="Hide strategies with this"
-              @click.stop="toggle(f.type, v.key, 'out', f.single)"
-            >
-              <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-            </button>
-          </div>
-          <button v-if="f.hidden > 0" class="st-more" @click="expanded.add(f.type)">Show all {{ f.total }}</button>
-        </div>
-      </div>
-      <div class="st-foot">Shares are % of reported maps this period. Community data, refreshed every 5 min.</div>
-    </aside>
-
-    <section class="st-main" aria-label="Strategy ladder">
-      <div class="st-top">
-        <div class="row">
-          <span class="dash-label">Timemark</span>
-          <div class="st-marks" role="group" aria-label="Timemark">
+      <div class="st-side dash-scroll">
+        <section class="st-sec">
+          <button class="st-sec-head" :aria-expanded="isOpen('timemark')" @click="toggleSection('timemark')">
+            <svg :class="['chev', { shut: !isOpen('timemark') }]" width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="dash-label">Timemark</span>
+            <span v-if="!isOpen('timemark')" class="picked">{{ timemarkLabel }}</span>
+          </button>
+          <div v-if="isOpen('timemark')" class="st-marks" role="group" aria-label="Timemark">
             <button
               v-for="t in timemarks"
               :key="t.key"
@@ -59,38 +20,98 @@
               {{ t.label }}<span v-if="t.share" class="mono">{{ t.share }}</span>
             </button>
           </div>
-        </div>
-        <div class="row">
-          <label class="ctl">Period
-            <select v-model="stage" aria-label="Period">
-              <option v-for="s in stages" :key="s" :value="s">{{ stageName(s) }}</option>
-            </select>
-          </label>
-          <div class="dash-seg" role="group" aria-label="Sort by">
-            <button v-for="s in SORTS" :key="s.value" :class="{ on: sort === s.value }" @click="sort = s.value">{{ s.label }}</button>
+        </section>
+
+        <div class="st-pair">
+          <div class="st-sec">
+            <span class="dash-label">Rank by</span>
+            <div class="dash-seg" role="group" aria-label="Rank by">
+              <button v-for="s in SORTS" :key="s.value" :class="{ on: sort === s.value }" @click="sort = s.value">{{ s.label }}</button>
+            </div>
           </div>
-          <label class="ctl">At least
-            <input v-model.lazy.number="minCount" class="st-num mono" type="number" min="1" aria-label="Minimum maps" />maps
-          </label>
+          <div class="st-sec">
+            <span class="dash-label">Maps run</span>
+            <label class="ctl">at least
+              <input v-model.lazy.number="minCount" class="st-num mono" type="number" min="1" aria-label="Minimum maps run" />
+            </label>
+          </div>
+        </div>
+
+        <label class="dash-input">
+          <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="var(--label)" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="var(--label)" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <input v-model="itemQuery" placeholder="Search compasses and astrolabes" aria-label="Search compasses and astrolabes" />
+        </label>
+
+        <div v-if="!tags && loading" class="dash-empty">Loading filters…</div>
+        <section v-for="g in itemGroups" :key="g.kind" class="st-sec">
+          <button class="st-sec-head" :aria-expanded="isOpen(g.kind)" @click="toggleSection(g.kind)">
+            <svg :class="['chev', { shut: !isOpen(g.kind) }]" width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="dash-label">{{ g.title }}</span>
+            <span v-if="!isOpen(g.kind) && g.picked" class="picked">{{ g.picked }} selected</span>
+            <span v-else class="note">{{ g.total }} used · up to {{ g.perMap }} per map</span>
+          </button>
+          <template v-if="isOpen(g.kind)">
+            <div
+              v-for="v in g.values"
+              :key="v.key"
+              :class="['st-value', v.state]"
+              role="button"
+              tabindex="0"
+              :aria-pressed="v.state === 'in'"
+              :title="v.state === 'in' ? 'Click to remove from filters' : 'Click to show only strategies that use this'"
+              @click="toggle(v.key, 'in')"
+              @keydown.enter.prevent="toggle(v.key, 'in')"
+            >
+              <span class="bar" :style="{ width: Math.min(100, v.share * 2) + '%' }"></span>
+              <span class="dash-icon tiny"><img :src="getIcon(v.key)" alt="" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" /></span>
+              <span class="label">{{ v.label }}</span>
+              <span class="mono share">{{ v.share.toFixed(1) }}%</span>
+              <button
+                :class="['exc', { on: v.state === 'out' }]"
+                aria-label="Exclude"
+                title="Hide strategies that use this"
+                @click.stop="toggle(v.key, 'out')"
+              >
+                <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <button v-if="g.hidden > 0" class="st-more" @click="expanded.add(g.kind)">Show all {{ g.total }}</button>
+            <div v-if="!g.values.length" class="none">{{ itemQuery ? 'No matches' : 'None reported' }}</div>
+          </template>
+        </section>
+      </div>
+      <div class="st-foot">Click a value to add it to the filters, minus to exclude it. Shares are % of reported maps this period. Community data, refreshed every 5 min.</div>
+    </aside>
+
+    <section class="st-main" aria-label="Strategy ladder">
+      <div class="st-top">
+        <div class="row">
+          <span class="heading">{{ heading }}</span>
+          <span class="sub">{{ board ? `${board.total} strategies · ranked by ${sort === 'totalCount' ? 'maps run' : 'profit per hour'}` : '' }}</span>
           <span class="status">
             <template v-if="seasonId">Season {{ seasonId }} · </template>
             <span v-if="error && board" class="warn">Couldn't refresh, showing earlier results · </span>
             <span v-else-if="stale" class="warn">Server unreachable, showing saved data · </span>
             {{ fetchedAt ? `updated ${fmtAgo(fetchedAt, now)}` : '' }}
           </span>
+          <label class="ctl">Period
+            <select v-model="stage" aria-label="Period">
+              <option v-for="s in stages" :key="s" :value="s">{{ stageName(s) }}</option>
+            </select>
+          </label>
         </div>
         <div v-if="active.length" class="row chips">
           <span class="faint">Filters:</span>
           <button
             v-for="a in active"
-            :key="a.type + a.key + a.state"
+            :key="a.key + a.state"
             :class="['st-active', a.state]"
-            @click="toggle(a.type, a.key, a.state, false)"
+            :title="a.label"
+            @click="toggle(a.key, a.state)"
           >
-            {{ a.state === 'out' ? 'Not: ' : '' }}{{ a.label }} <span aria-label="Remove">×</span>
+            <span class="txt">{{ a.state === 'out' ? 'Not: ' : '' }}{{ a.label }}</span> <span aria-label="Remove">×</span>
           </button>
           <button class="st-link" @click="clearFilters">Clear</button>
-          <span class="count">{{ board ? `${board.total} strategies` : '' }}</span>
         </div>
       </div>
 
@@ -150,26 +171,26 @@ import { getIcon } from '../../utils/assets';
 import { fmtAgo, fmtDur, fmtValue } from './format';
 import StrategyDetail from './StrategyDetail.vue';
 import {
-  areaName, strategyApi, fetchDetail, isJunkKey, itemInfo, itemKind, mechanicName, stageName, talentText, timeName, treeList,
+  areaName, strategyApi, fetchDetail, itemInfo, itemKind, stageName, timeName, treeList,
   type FilterItem, type LeaderboardData, type Query, type StageOptions, type StrategyRow, type TagsData,
 } from './strategies/api';
 
-type FacetType = 'area' | 'gameplay' | 'mainTalent' | 'costItem';
 type State = 'in' | 'out';
+type Kind = 'compass' | 'astrolabe';
+type Section = Kind | 'timemark';
 
 const PAGE_SIZE = 10;
-const FACET_ROWS = 8;
+const ITEM_ROWS = 8;
 const COMPASS_SLOTS = 4;
 const ASTROLABE_SLOTS = 2;
+const CLOSED_KEY = 'tli_strategies_closed_sections';
 const SORTS = [
   { value: 'avgEfficiency', label: 'Profit / hour' },
   { value: 'totalCount', label: 'Maps' },
 ];
-const FACETS: { type: FacetType; title: string; single: boolean }[] = [
-  { type: 'area', title: 'Area', single: true },
-  { type: 'gameplay', title: 'Season mechanic', single: false },
-  { type: 'mainTalent', title: 'Main talent', single: false },
-  { type: 'costItem', title: 'Cost item', single: false },
+const GROUPS: { kind: Kind; title: string; perMap: number }[] = [
+  { kind: 'compass', title: 'Compasses', perMap: COMPASS_SLOTS },
+  { kind: 'astrolabe', title: 'Astrolabes', perMap: ASTROLABE_SLOTS },
 ];
 const TIMEMARKS = [
   { key: '', label: 'All' },
@@ -188,9 +209,11 @@ const timemark = ref('');
 const sort = ref('avgEfficiency');
 const minCount = ref(30);
 const page = ref(1);
-const picks = reactive<Record<FacetType, Record<string, State>>>({ area: {}, gameplay: {}, mainTalent: {}, costItem: {} });
-const facetQuery = ref('');
-const expanded = reactive(new Set<FacetType>());
+// Picked compasses and astrolabes (cost item id -> include / exclude).
+const picks = reactive<Record<string, State>>({});
+const itemQuery = ref('');
+const expanded = reactive(new Set<Kind>());
+const closed = reactive(new Set<Section>(loadClosed()));
 
 const baseTags = ref<TagsData | null>(null);
 const tags = ref<TagsData | null>(null);
@@ -207,7 +230,7 @@ const kits = reactive(new Map<string, { id: string; name: string; kind: 'compass
 function tagList(state: State): string {
   const out: string[] = [];
   if (state === 'in' && timemark.value) out.push(`timeIndex:${timemark.value}`);
-  FACETS.forEach(f => Object.entries(picks[f.type]).forEach(([key, s]) => { if (s === state) out.push(`${f.type}:${key}`); }));
+  Object.entries(picks).forEach(([key, s]) => { if (s === state) out.push(`costItem:${key}`); });
   return out.join(',');
 }
 
@@ -261,7 +284,7 @@ async function loadStages() {
 }
 
 async function nameCostItems(t: TagsData) {
-  const ids = (t.filters.costItem?.items ?? []).map(i => i.key);
+  const ids = [...new Set([...(t.filters.costItem?.items ?? []).map(i => i.key), ...Object.keys(picks)])];
   const info = await itemInfo(ids);
   const m = new Map(itemNames.value);
   ids.forEach(id => m.set(id, info.get(id)?.name || `Item ${id}`));
@@ -323,28 +346,24 @@ const rows = computed(() => {
 
 const pages = computed(() => Math.max(1, Math.ceil((board.value?.total ?? 0) / PAGE_SIZE)));
 
-function labelFor(type: FacetType, key: string): string {
-  if (type === 'area') return areaName(key);
-  if (type === 'gameplay') return mechanicName(key);
-  if (type === 'mainTalent') return talentText(key);
-  return itemNames.value.get(key) ?? `Item ${key}`;
-}
+const itemName = (key: string) => itemNames.value.get(key) ?? `Item ${key}`;
 
-const facets = computed(() => {
-  const q = facetQuery.value.trim().toLowerCase();
-  return FACETS.map(f => {
-    const items: FilterItem[] = (tags.value?.filters[f.type]?.items ?? []).filter(i => !isJunkKey(i.key));
-    // Keep picked values visible even when the current filters leave them no maps.
-    Object.keys(picks[f.type]).forEach(key => {
-      if (!items.some(i => i.key === key)) items.push({ key, label: key, count: 0, strategyCount: 0, hotRate: 0 });
-    });
+const itemGroups = computed(() => {
+  const q = itemQuery.value.trim().toLowerCase();
+  const items: FilterItem[] = [...(tags.value?.filters.costItem?.items ?? [])];
+  // Keep picked items visible even when the current filters leave them no maps.
+  Object.keys(picks).forEach(key => {
+    if (!items.some(i => i.key === key)) items.push({ key, label: key, count: 0, strategyCount: 0, hotRate: 0 });
+  });
+  return GROUPS.map(g => {
     const all = items
-      .map(i => ({ key: i.key, label: labelFor(f.type, i.key), share: i.hotRate || 0, state: picks[f.type][i.key] ?? '' }))
-      .filter(v => !q || v.label.toLowerCase().includes(q));
-    const limit = q || expanded.has(f.type) ? all.length : FACET_ROWS;
-    const shown = all.filter((v, i) => i < limit || v.state);
-    return { ...f, total: all.length, values: shown, hidden: all.length - shown.length };
-  }).filter(f => f.total > 0 || !q);
+      .filter(i => itemNames.value.has(i.key) && itemKind(itemName(i.key)) === g.kind)
+      .map(i => ({ key: i.key, label: itemName(i.key), share: i.hotRate || 0, state: picks[i.key] ?? '' }));
+    const matches = all.filter(v => !q || v.label.toLowerCase().includes(q));
+    const limit = q || expanded.has(g.kind) ? matches.length : ITEM_ROWS;
+    const values = matches.filter((v, i) => i < limit || v.state);
+    return { ...g, total: all.length, values, hidden: matches.length - values.length, picked: all.filter(v => v.state).length };
+  });
 });
 
 const timemarks = computed(() => {
@@ -356,21 +375,41 @@ const timemarks = computed(() => {
   });
 });
 
+const timemarkLabel = computed(() => TIMEMARKS.find(t => t.key === timemark.value)?.label ?? 'All');
+const heading = computed(() => (timemark.value ? `${timemarkLabel.value} strategies` : 'All strategies'));
+
 const active = computed(() =>
-  FACETS.flatMap(f => Object.entries(picks[f.type]).map(([key, state]) => ({ type: f.type, key, state, label: labelFor(f.type, key) }))),
+  Object.entries(picks).map(([key, state]) => ({ key, state, label: itemName(key) })),
 );
 
-function toggle(type: FacetType, key: string, state: State, single: boolean) {
-  const cur = picks[type][key];
-  if (single && state === 'in') {
-    Object.keys(picks[type]).forEach(k => { if (picks[type][k] === 'in') delete picks[type][k]; });
-  }
-  if (cur === state) delete picks[type][key];
-  else picks[type][key] = state;
+function toggle(key: string, state: State) {
+  if (picks[key] === state) delete picks[key];
+  else picks[key] = state;
 }
 
 function clearFilters() {
-  FACETS.forEach(f => Object.keys(picks[f.type]).forEach(k => delete picks[f.type][k]));
+  Object.keys(picks).forEach(k => delete picks[k]);
+}
+
+function loadClosed(): Section[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLOSED_KEY) ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is Section => ['timemark', 'compass', 'astrolabe'].includes(x)) : [];
+  } catch {
+    return [];
+  }
+}
+
+const isOpen = (section: Section) => !closed.has(section);
+
+function toggleSection(section: Section) {
+  if (closed.has(section)) closed.delete(section);
+  else closed.add(section);
+  try {
+    localStorage.setItem(CLOSED_KEY, JSON.stringify([...closed]));
+  } catch {
+    // Remembering collapsed sections is a convenience; ignore storage errors.
+  }
 }
 
 let debounce: ReturnType<typeof setTimeout> | null = null;
@@ -400,17 +439,24 @@ onUnmounted(() => {
 
 <style scoped>
 .st { flex: 1; min-height: 0; display: flex; }
-.st-filters { width: 290px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
-.st-search { padding: 12px 12px 8px; }
-.st-facets { flex: 1; min-height: 0; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 14px; }
-.st-facet { display: flex; flex-direction: column; gap: 4px; }
-.st-facet .head { display: flex; justify-content: space-between; align-items: baseline; }
-.st-facet .note { font-size: 10px; color: var(--faint); }
+.st-filters { width: 310px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
+.st-side { flex: 1; min-height: 0; padding: 12px; display: flex; flex-direction: column; gap: 14px; }
+.st-sec { display: flex; flex-direction: column; gap: 6px; }
+.st-sec-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0; background: none; border: none; cursor: pointer; color: var(--label); text-align: left; }
+.st-sec-head .chev { flex-shrink: 0; transition: transform 0.15s; }
+.st-sec-head .chev.shut { transform: rotate(-90deg); }
+.st-sec-head .picked { margin-left: auto; font-size: 10.5px; font-weight: 600; color: var(--accent-text); }
+.st-sec-head .note { margin-left: auto; font-size: 10px; color: var(--faint); }
+.st-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.st-pair .dash-seg button { flex: 1; }
+.none { font-size: 11px; color: var(--faint); padding: 2px 6px; }
 .st-value { position: relative; display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; overflow: hidden; cursor: pointer; background: var(--panel); border: 1px solid var(--panel-border); }
 .st-value:hover { border-color: var(--accent-border); }
 .st-value.in { background: var(--accent-bg); border-color: var(--accent-border); }
 .st-value.out { border-color: var(--neg); }
 .st-value .bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-bg); opacity: 0.6; }
+.st-value .tiny { position: relative; width: 20px; height: 20px; border-radius: 5px; }
+.st-value .tiny img { width: 16px; height: 16px; }
 .st-value .label { position: relative; flex: 1; min-width: 0; font-size: 11.5px; line-height: 1.3; color: var(--strong); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .st-value.out .label { color: var(--faint); text-decoration: line-through; }
 .st-value .share { position: relative; font-size: 10px; color: var(--label); }
@@ -423,17 +469,19 @@ onUnmounted(() => {
 .st-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .st-top { padding: 12px 16px 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
 .st-top .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
-.st-marks { display: flex; gap: 4px; flex-wrap: wrap; }
-.st-mark { display: flex; align-items: baseline; gap: 5px; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer; background: var(--chip); border: 1px solid var(--chip-border); color: var(--text); }
-.st-mark .mono { font-size: 10px; font-weight: 500; opacity: 0.75; }
+.st-marks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.st-mark { display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 12px; font-weight: 600; padding: 5px 4px; border-radius: 8px; cursor: pointer; background: var(--chip); border: 1px solid var(--chip-border); color: var(--text); }
+.st-mark .mono { font-size: 9.5px; font-weight: 500; opacity: 0.75; }
 .st-mark.on { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-text); }
 .st-mark:disabled { cursor: default; opacity: 0.45; }
 .ctl { display: flex; align-items: center; gap: 6px; }
 .st-num { width: 46px; font-size: 12px; padding: 4px 6px; border-radius: 6px; background: var(--input); border: 1px solid var(--chip-border); color: var(--strong); text-align: center; outline: none; }
+.heading { font-size: 15px; font-weight: 700; color: var(--strong); }
+.sub { font-size: 11px; color: var(--label); }
 .status { margin-left: auto; font-size: 10px; color: var(--label); }
 .status .warn { color: var(--gold); }
-.chips .count { margin-left: auto; color: var(--label); }
-.st-active { display: flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; font-size: 11px; cursor: pointer; background: var(--accent-bg); border: 1px solid var(--accent-border); color: var(--accent-text); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-active { display: flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; font-size: 11px; cursor: pointer; background: var(--accent-bg); border: 1px solid var(--accent-border); color: var(--accent-text); max-width: 100%; box-sizing: border-box; white-space: nowrap; }
+.st-active .txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .st-active.out { background: transparent; border-color: var(--neg); color: var(--neg); }
 
 .st-progress { position: relative; height: 2px; margin-top: -1px; overflow: hidden; }

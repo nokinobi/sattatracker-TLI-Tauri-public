@@ -156,6 +156,7 @@ export function stageName(value: string): string {
 
 export function itemKind(name: string): 'compass' | 'astrolabe' | 'other' {
   if (/astrolabe/i.test(name)) return 'astrolabe';
-  if (/compass/i.test(name)) return 'compass';
+  // "Compass Profound Probe" is a probe, not a compass.
+  if (/compass/i.test(name) && !/probe/i.test(name)) return 'compass';
   return 'other';
 }
