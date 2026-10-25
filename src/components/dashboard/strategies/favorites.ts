@@ -4,7 +4,8 @@ import type { StrategyRow } from './api';
 
 // Strategies the user starred, with their own note. Saved locally and kept across seasons;
 // each one keeps the numbers it had when it was saved, so it can be shown even after the
-// strategy drops off the ladder.
+// strategy drops off the ladder. A favorite belongs to the period it was saved from: the same
+// strategy key in another period has other numbers and is a separate favorite.
 
 export interface Favorite {
   key: string;
@@ -52,35 +53,35 @@ function save() {
 
 export const favorites = computed(() => [...list].sort((a, b) => b.savedAt - a.savedAt));
 
-export function favoriteOf(key: string): Favorite | undefined {
-  return list.find(f => f.key === key);
+export function favoriteOf(key: string, stage: string): Favorite | undefined {
+  return list.find(f => f.key === key && f.stage === stage);
 }
 
 export const favoritesFull = computed(() => list.length >= MAX);
 
 // Never drops an older favorite to make room: when the list is full, nothing is added.
 export function addFavorite(row: StrategyRow, stage: string, seasonId: string): boolean {
-  if (favoriteOf(row.key)) return true;
+  if (favoriteOf(row.key, stage)) return true;
   if (list.length >= MAX) return false;
   list.unshift({ key: row.key, stage, seasonId, savedAt: Date.now(), note: '', row: { ...row } });
   save();
   return true;
 }
 
-export function removeFavorite(key: string) {
-  const i = list.findIndex(f => f.key === key);
+export function removeFavorite(key: string, stage: string) {
+  const i = list.findIndex(f => f.key === key && f.stage === stage);
   if (i < 0) return;
   list.splice(i, 1);
   save();
 }
 
 export function toggleFavorite(row: StrategyRow, stage: string, seasonId: string) {
-  if (favoriteOf(row.key)) removeFavorite(row.key);
+  if (favoriteOf(row.key, stage)) removeFavorite(row.key, stage);
   else addFavorite(row, stage, seasonId);
 }
 
-export function setNote(key: string, note: string) {
-  const f = favoriteOf(key);
+export function setNote(key: string, stage: string, note: string) {
+  const f = favoriteOf(key, stage);
   if (!f) return;
   f.note = note.slice(0, NOTE_MAX);
   save();

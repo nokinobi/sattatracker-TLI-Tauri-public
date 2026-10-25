@@ -1,5 +1,5 @@
 <template>
-  <StrategyDetail v-if="selected" :key="selected.key" :row="selected" :stage="selectedStage || stage" :season-id="seasonId" @back="selected = null" />
+  <StrategyDetail v-if="selected" :key="selectedStage + '|' + selected.key" :row="selected" :stage="selectedStage || stage" :season-id="seasonId" @back="selected = null" />
   <div v-else class="st">
     <aside :class="['st-filters', { dim: showFavorites }]" aria-label="Filters" :inert="showFavorites" :title="showFavorites ? 'Filters apply to the ladder, not to favorites' : undefined">
       <div class="st-side dash-scroll">
@@ -180,7 +180,7 @@
         </div>
         <div
           v-for="f in favRows"
-          :key="f.key"
+          :key="f.stage + '|' + f.key"
           class="st-row fav"
           role="button"
           tabindex="0"
@@ -205,7 +205,7 @@
           <span class="mono r">{{ f.maps }}</span>
           <span class="mono r gold strong">{{ f.perMap }}</span>
           <span class="mono r faint">{{ f.dur }}</span>
-          <button class="st-star on" aria-label="Remove from favorites" title="Remove from favorites" @click.stop="removeFavorite(f.key)">
+          <button class="st-star on" aria-label="Remove from favorites" title="Remove from favorites" @click.stop="removeFavorite(f.key, f.stage)">
             <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path :d="STAR" /></svg>
           </button>
         </div>
@@ -450,7 +450,7 @@ const rows = computed(() => {
       maps: r.count,
       perMap: '+' + Math.round(r.avgEarnings),
       dur: fmtDur(r.avgDuration / 1000),
-      fav: !!favoriteOf(r.key),
+      fav: !!favoriteOf(r.key, stage.value),
     };
   });
 });
