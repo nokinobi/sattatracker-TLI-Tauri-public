@@ -61,7 +61,7 @@
             class="font-extrabold leading-[1.2] whitespace-nowrap truncate"
             :style="{
               fontSize: 'calc(clamp(13px, calc(6.7cqw * var(--cq)), 20px) * var(--fs))',
-              color: mapProfit >= 0 ? '#4ade80' : '#f87171',
+              color: oneDecimal(mapProfit) >= 0 ? '#4ade80' : '#f87171',
               transformOrigin: 'left center',
               animation: fx && fx.pop ? `cw-pop-${fx.ab} 1.6s ease-out 1` : 'none',
             }"
@@ -465,13 +465,19 @@ function fmtAmount(n: number): string {
   return a.toFixed(1);
 }
 
+// The sign and colour follow the shown value, so -0.04 reads "+0.0" rather than a red "−0.0".
+function oneDecimal(n: number): number {
+  return Math.round(n * 10) / 10 || 0;
+}
+
 function fmtSigned(n: number): string {
-  return (n >= 0 ? '+' : '−') + fmtAmount(n);
+  const r = oneDecimal(n);
+  return (r >= 0 ? '+' : '−') + fmtAmount(r);
 }
 
 const perHour = computed(() => {
-  const n = Number(store.profitPerHour);
-  return (n < 0 ? '−' : '') + fmtAmount(n);
+  const r = oneDecimal(Number(store.profitPerHour));
+  return (r < 0 ? '−' : '') + fmtAmount(r);
 });
 
 type LootRow = (typeof groupedDrops.value)[number];
@@ -548,9 +554,22 @@ function pollHover() {
 
 watch(groupedDrops, () => { if (panel.value) panel.value = layoutPanel(); });
 
+// App.vue's click-through poll feeds the cursor while the overlay ignores the mouse, but it
+// skips that in configure/edit mode, when the overlay catches the mouse itself: this keeps the
+// hover list working then.
 const onWindowMouseMove = (e: MouseEvent) => updateCursor(e.clientX, e.clientY);
 
+// The hover poll only runs while there is a hidden part of the loot list to show.
 let hoverInterval: ReturnType<typeof setInterval> | null = null;
+watch(() => isVisible.value && moreCount.value > 0, (needed) => {
+  if (needed && !hoverInterval) {
+    hoverInterval = setInterval(pollHover, HOVER_POLL);
+  } else if (!needed && hoverInterval) {
+    clearInterval(hoverInterval);
+    hoverInterval = null;
+    panel.value = null;
+  }
+}, { immediate: true });
 
 let barObserver: ResizeObserver | null = null;
 watch(barRef, (el) => {
@@ -672,10 +691,11 @@ function onOpacity(e: Event) {
 function applySaved() {
   const saved = store.widgetPositions.compactWindow;
   if (!saved) return;
-  x.value = saved.x;
-  y.value = saved.y;
-  if (saved.w) w.value = saved.w;
+  // A position saved on a bigger screen could put the click-through window out of reach.
+  if (saved.w) w.value = Math.min(MAX_W, Math.max(oneColW.value, saved.w));
   if (saved.h) h.value = saved.h;
+  x.value = Math.min(Math.max(0, saved.x), Math.max(0, window.innerWidth - w.value));
+  y.value = Math.min(Math.max(0, saved.y), Math.max(0, window.innerHeight - 24));
 }
 
 watch(() => store.widgetPositions.compactWindow, () => { if (!dragMode.value) applySaved(); }, { deep: true });
@@ -684,7 +704,6 @@ let topObserver: ResizeObserver | null = null;
 
 onMounted(() => {
   applySaved();
-  hoverInterval = setInterval(pollHover, HOVER_POLL);
   window.addEventListener('mousemove', onWindowMouseMove);
   if (topRef.value) {
     topObserver = new ResizeObserver(() => {
