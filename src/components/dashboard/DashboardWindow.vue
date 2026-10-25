@@ -274,7 +274,7 @@ watch(() => props.isOpen, (open) => {
   --tooltip: rgba(20,18,30,0.96);
   --shadow: 0 24px 80px rgba(0,0,0,0.85);
 
-  width: 1000px;
+  width: 1080px;
   height: 660px;
   max-width: calc((100vw - 32px) / var(--zoom, 1));
   max-height: calc((100vh - 32px) / var(--zoom, 1));
@@ -325,23 +325,23 @@ watch(() => props.isOpen, (open) => {
 .dash .mono { font-family: 'JetBrains Mono', Consolas, monospace; }
 
 .dash-header { display: flex; align-items: center; gap: 22px; padding: 0 16px; height: 52px; flex-shrink: 0; border-bottom: 1px solid var(--line); }
-.dash-brand { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; color: var(--strong); }
+.dash-brand { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; color: var(--strong); }
 .dash-tabs { display: flex; align-self: stretch; gap: 2px; }
-.dash-tab { display: flex; align-items: center; gap: 7px; padding: 0 14px; font-size: 13px; font-weight: 600; color: var(--muted); background: none; border: none; cursor: pointer; }
+.dash-tab { display: flex; align-items: center; gap: 7px; padding: 0 12px; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--muted); background: none; border: none; cursor: pointer; }
 .dash-tab:hover { color: var(--strong); }
 .dash-tab.on { color: var(--strong); box-shadow: inset 0 -2px 0 var(--accent); }
 .dash-badge { font: 600 10px 'JetBrains Mono', Consolas, monospace; padding: 1px 6px; border-radius: 999px; background: var(--chip); border: 1px solid var(--chip-border); color: var(--muted); }
 .dash-tab.on .dash-badge { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-text); }
 .dash-header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 
-.dash-status { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 999px; }
+.dash-status { display: flex; align-items: center; gap: 7px; white-space: nowrap; font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 999px; }
 .dash-status .dot { width: 7px; height: 7px; border-radius: 50%; }
 .dash-status.live { background: var(--live-bg); border: 1px solid var(--live-border); color: var(--live-text); }
 .dash-status.live .dot { background: var(--live); box-shadow: 0 0 0 3px var(--live-bg); }
 .dash-status.idle { background: var(--chip); border: 1px solid var(--chip-border); color: var(--muted); }
 .dash-status.idle .dot { background: var(--faint); }
 
-.dash-btn { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; font-size: 12px; font-weight: 600; border-radius: 8px; background: var(--chip); border: 1px solid var(--chip-border); color: var(--text); cursor: pointer; }
+.dash-btn { display: flex; align-items: center; gap: 6px; white-space: nowrap; height: 32px; padding: 0 12px; font-size: 12px; font-weight: 600; border-radius: 8px; background: var(--chip); border: 1px solid var(--chip-border); color: var(--text); cursor: pointer; }
 .dash-btn:hover { border-color: var(--accent-border); }
 .dash-btn.icon { width: 32px; padding: 0; justify-content: center; }
 .dash-btn.primary { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-text); }

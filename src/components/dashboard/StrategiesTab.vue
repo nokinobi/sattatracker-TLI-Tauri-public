@@ -19,18 +19,24 @@
             v-for="v in f.values"
             :key="v.key"
             :class="['st-value', v.state]"
+            role="button"
+            tabindex="0"
+            :aria-pressed="v.state === 'in'"
+            :title="v.state === 'in' ? 'Click to remove from filters' : 'Click to show only strategies with this'"
+            @click="toggle(f.type, v.key, 'in', f.single)"
+            @keydown.enter.prevent="toggle(f.type, v.key, 'in', f.single)"
           >
             <span class="bar" :style="{ width: Math.min(100, v.share * 2) + '%' }"></span>
-            <span class="label" :title="v.label">{{ v.label }}</span>
+            <span class="label">{{ v.label }}</span>
             <span class="mono share">{{ v.share.toFixed(1) }}%</span>
-            <span class="btns">
-              <button :class="['inc', { on: v.state === 'in' }]" aria-label="Include" title="Only strategies with this" @click="toggle(f.type, v.key, 'in', f.single)">
-                <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-              <button :class="['exc', { on: v.state === 'out' }]" aria-label="Exclude" title="Hide strategies with this" @click="toggle(f.type, v.key, 'out', f.single)">
-                <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-              </button>
-            </span>
+            <button
+              :class="['exc', { on: v.state === 'out' }]"
+              aria-label="Exclude"
+              title="Hide strategies with this"
+              @click.stop="toggle(f.type, v.key, 'out', f.single)"
+            >
+              <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </button>
           </div>
           <button v-if="f.hidden > 0" class="st-more" @click="expanded.add(f.type)">Show all {{ f.total }}</button>
         </div>
@@ -68,7 +74,8 @@
           </label>
           <span class="status">
             <template v-if="seasonId">Season {{ seasonId }} · </template>
-            <span v-if="stale" class="warn">Server unreachable, showing saved data · </span>
+            <span v-if="error && board" class="warn">Couldn't refresh, showing earlier results · </span>
+            <span v-else-if="stale" class="warn">Server unreachable, showing saved data · </span>
             {{ fetchedAt ? `updated ${fmtAgo(fetchedAt, now)}` : '' }}
           </span>
         </div>
@@ -106,7 +113,7 @@
             <span class="title" :title="r.title">{{ r.title }}</span>
             <span class="meta">
               <span class="tag">{{ r.area }}</span>
-              <span class="tag time">{{ r.time }}</span>
+              <span v-if="r.time !== r.area" class="tag time">{{ r.time }}</span>
               <span class="slots" :aria-label="r.slotsLabel">
                 <span
                   v-for="(s, i) in r.slots"
@@ -403,17 +410,17 @@ onUnmounted(() => {
 .st-facet { display: flex; flex-direction: column; gap: 4px; }
 .st-facet .head { display: flex; justify-content: space-between; align-items: baseline; }
 .st-facet .note { font-size: 10px; color: var(--faint); }
-.st-value { position: relative; display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; overflow: hidden; background: var(--panel); border: 1px solid var(--panel-border); }
+.st-value { position: relative; display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; overflow: hidden; cursor: pointer; background: var(--panel); border: 1px solid var(--panel-border); }
+.st-value:hover { border-color: var(--accent-border); }
 .st-value.in { background: var(--accent-bg); border-color: var(--accent-border); }
 .st-value.out { border-color: var(--neg); }
 .st-value .bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-bg); opacity: 0.6; }
 .st-value .label { position: relative; flex: 1; min-width: 0; font-size: 11.5px; line-height: 1.3; color: var(--strong); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .st-value.out .label { color: var(--faint); text-decoration: line-through; }
 .st-value .share { position: relative; font-size: 10px; color: var(--label); }
-.st-value .btns { position: relative; display: flex; gap: 2px; }
-.st-value .btns button { width: 18px; height: 18px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; cursor: pointer; background: var(--chip); border: 1px solid var(--chip-border); color: var(--muted); }
-.st-value .btns .inc.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-.st-value .btns .exc.on { background: var(--neg); border-color: var(--neg); color: #fff; }
+.st-value .exc { position: relative; flex-shrink: 0; width: 18px; height: 18px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; cursor: pointer; background: var(--chip); border: 1px solid var(--chip-border); color: var(--muted); }
+.st-value .exc:hover { border-color: var(--neg); color: var(--neg); }
+.st-value .exc.on { background: var(--neg); border-color: var(--neg); color: #fff; }
 .st-more, .st-link { align-self: flex-start; padding: 2px 6px; font-size: 11px; background: none; border: none; color: var(--accent); cursor: pointer; }
 .st-foot { padding: 10px 12px; border-top: 1px solid var(--line); font-size: 10px; line-height: 1.5; color: var(--label); }
 
