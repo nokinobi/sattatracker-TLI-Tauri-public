@@ -42,8 +42,10 @@ export interface SessionRecord {
   profit: number;
   maps: number;
   lootCount: number;
+  name?: string;
 }
 
+export const MAX_SESSION_NAME = 60;
 export const MAX_MAP_HISTORY = 500;
 export const MAX_ARCHIVED_SESSIONS = 200;
 export const MAX_RECORD_DROPS = 80;
