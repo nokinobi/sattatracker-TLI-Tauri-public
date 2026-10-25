@@ -1,0 +1,459 @@
+<template>
+  <StrategyDetail v-if="selected" :row="selected" :stage="stage" @back="selected = null" />
+  <div v-else class="st">
+    <aside class="st-filters" aria-label="Filters">
+      <div class="st-search">
+        <label class="dash-input">
+          <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="var(--label)" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="var(--label)" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <input v-model="facetQuery" placeholder="Search filters, e.g. beacon" aria-label="Search filters" />
+        </label>
+      </div>
+      <div class="st-facets dash-scroll">
+        <div v-if="!tags && loading" class="dash-empty">Loading filters…</div>
+        <div v-for="f in facets" :key="f.type" class="st-facet">
+          <div class="head">
+            <span class="dash-label">{{ f.title }}</span>
+            <span class="note">{{ f.single ? 'one choice' : 'any' }} · {{ f.total }}</span>
+          </div>
+          <div
+            v-for="v in f.values"
+            :key="v.key"
+            :class="['st-value', v.state]"
+          >
+            <span class="bar" :style="{ width: Math.min(100, v.share * 2) + '%' }"></span>
+            <span class="label" :title="v.label">{{ v.label }}</span>
+            <span class="mono share">{{ v.share.toFixed(1) }}%</span>
+            <span class="btns">
+              <button :class="['inc', { on: v.state === 'in' }]" aria-label="Include" title="Only strategies with this" @click="toggle(f.type, v.key, 'in', f.single)">
+                <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button :class="['exc', { on: v.state === 'out' }]" aria-label="Exclude" title="Hide strategies with this" @click="toggle(f.type, v.key, 'out', f.single)">
+                <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </button>
+            </span>
+          </div>
+          <button v-if="f.hidden > 0" class="st-more" @click="expanded.add(f.type)">Show all {{ f.total }}</button>
+        </div>
+      </div>
+      <div class="st-foot">Shares are % of reported maps this period. Community data, refreshed every 5 min.</div>
+    </aside>
+
+    <section class="st-main" aria-label="Strategy ladder">
+      <div class="st-top">
+        <div class="row">
+          <span class="dash-label">Timemark</span>
+          <div class="st-marks" role="group" aria-label="Timemark">
+            <button
+              v-for="t in timemarks"
+              :key="t.key"
+              :class="['st-mark', { on: timemark === t.key }]"
+              :disabled="t.disabled"
+              @click="timemark = t.key"
+            >
+              {{ t.label }}<span v-if="t.share" class="mono">{{ t.share }}</span>
+            </button>
+          </div>
+        </div>
+        <div class="row">
+          <label class="ctl">Period
+            <select v-model="stage" aria-label="Period">
+              <option v-for="s in stages" :key="s" :value="s">{{ stageName(s) }}</option>
+            </select>
+          </label>
+          <div class="dash-seg" role="group" aria-label="Sort by">
+            <button v-for="s in SORTS" :key="s.value" :class="{ on: sort === s.value }" @click="sort = s.value">{{ s.label }}</button>
+          </div>
+          <label class="ctl">At least
+            <input v-model.lazy.number="minCount" class="st-num mono" type="number" min="1" aria-label="Minimum maps" />maps
+          </label>
+          <span class="status">
+            <template v-if="seasonId">Season {{ seasonId }} · </template>
+            <span v-if="stale" class="warn">Server unreachable, showing saved data · </span>
+            {{ fetchedAt ? `updated ${fmtAgo(fetchedAt, now)}` : '' }}
+          </span>
+        </div>
+        <div v-if="active.length" class="row chips">
+          <span class="faint">Filters:</span>
+          <button
+            v-for="a in active"
+            :key="a.type + a.key + a.state"
+            :class="['st-active', a.state]"
+            @click="toggle(a.type, a.key, a.state, false)"
+          >
+            {{ a.state === 'out' ? 'Not: ' : '' }}{{ a.label }} <span aria-label="Remove">×</span>
+          </button>
+          <button class="st-link" @click="clearFilters">Clear</button>
+          <span class="count">{{ board ? `${board.total} strategies` : '' }}</span>
+        </div>
+      </div>
+
+      <div class="st-head">
+        <span>#</span><span>Strategy</span><span>Score</span><span class="r">Maps</span><span class="r">FE / map</span><span class="r">FE / min</span><span class="r">Time</span>
+      </div>
+      <div class="st-list dash-scroll">
+        <div v-if="error && !board" class="dash-empty">
+          <div>
+            <div>Couldn't load strategies: {{ error }}</div>
+            <button class="dash-btn small retry" @click="load">Try again</button>
+          </div>
+        </div>
+        <div v-else-if="!board" class="dash-empty">Loading strategies…</div>
+        <div v-else-if="rows.length === 0" class="dash-empty">No strategies match these filters</div>
+        <button v-for="r in rows" :key="r.key" class="st-row" @click="selected = r.raw">
+          <span class="mono rank">{{ r.rank }}</span>
+          <span class="who">
+            <span class="title" :title="r.title">{{ r.title }}</span>
+            <span class="meta">
+              <span class="tag">{{ r.area }}</span>
+              <span class="tag time">{{ r.time }}</span>
+              <span class="slots" :aria-label="r.slotsLabel">
+                <span
+                  v-for="(s, i) in r.slots"
+                  :key="i"
+                  :class="['slot', s.kind, { empty: !s.id, gap: i === COMPASS_SLOTS }]"
+                  :title="s.name"
+                >
+                  <img v-if="s.id" :src="getIcon(s.id)" alt="" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" />
+                </span>
+              </span>
+            </span>
+          </span>
+          <span class="score">
+            <span class="track"><span :style="{ width: r.scoreBar }"></span></span>
+            <span class="mono">{{ r.score }}</span>
+          </span>
+          <span class="mono r">{{ r.maps }}</span>
+          <span class="mono r gold strong">{{ r.perMap }}</span>
+          <span class="mono r pos strong">{{ r.perMin }}</span>
+          <span class="mono r faint">{{ r.dur }}</span>
+        </button>
+      </div>
+      <div v-if="board && pages > 1" class="st-pager">
+        <button class="dash-btn small" :disabled="page <= 1" @click="page--">Previous</button>
+        <span class="mono">Page {{ page }} of {{ pages }}</span>
+        <button class="dash-btn small" :disabled="page >= pages" @click="page++">Next</button>
+      </div>
+    </section>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { getIcon } from '../../utils/assets';
+import { fmtAgo, fmtDur } from './format';
+import StrategyDetail from './StrategyDetail.vue';
+import {
+  areaName, strategyApi, fetchDetail, isJunkKey, itemInfo, itemKind, mechanicName, stageName, talentText, timeName, treeList,
+  type FilterItem, type LeaderboardData, type Query, type StageOptions, type StrategyRow, type TagsData,
+} from './strategies/api';
+
+type FacetType = 'area' | 'gameplay' | 'mainTalent' | 'costItem';
+type State = 'in' | 'out';
+
+const PAGE_SIZE = 10;
+const FACET_ROWS = 8;
+const COMPASS_SLOTS = 4;
+const ASTROLABE_SLOTS = 2;
+const SORTS = [
+  { value: 'score', label: 'Score' },
+  { value: 'avgEfficiency', label: 'FE / min' },
+  { value: 'avgEarnings', label: 'FE / map' },
+  { value: 'totalCount', label: 'Maps' },
+];
+const FACETS: { type: FacetType; title: string; single: boolean }[] = [
+  { type: 'area', title: 'Area', single: true },
+  { type: 'gameplay', title: 'Season mechanic', single: false },
+  { type: 'mainTalent', title: 'Main talent', single: false },
+  { type: 'costItem', title: 'Cost item', single: false },
+];
+const TIMEMARKS = [
+  { key: '', label: 'All' },
+  { key: '7', label: 'T7-1' },
+  { key: '8', label: 'T7-2' },
+  { key: '10', label: 'T8-1' },
+  { key: '11', label: 'T8-2' },
+  { key: '幽邃', label: 'Profound' },
+  { key: '13', label: 'Deep Space' },
+];
+
+const stages = ref<string[]>([]);
+const stage = ref('');
+const seasonId = ref('');
+const timemark = ref('');
+const sort = ref('score');
+const minCount = ref(30);
+const page = ref(1);
+const picks = reactive<Record<FacetType, Record<string, State>>>({ area: {}, gameplay: {}, mainTalent: {}, costItem: {} });
+const facetQuery = ref('');
+const expanded = reactive(new Set<FacetType>());
+
+const baseTags = ref<TagsData | null>(null);
+const tags = ref<TagsData | null>(null);
+const board = ref<LeaderboardData | null>(null);
+const loading = ref(false);
+const error = ref('');
+const stale = ref(false);
+const fetchedAt = ref(0);
+const now = ref(Date.now());
+const selected = ref<StrategyRow | null>(null);
+const itemNames = ref(new Map<string, string>());
+const kits = reactive(new Map<string, { id: string; name: string; kind: 'compass' | 'astrolabe' }[]>());
+
+function tagList(state: State): string {
+  const out: string[] = [];
+  if (state === 'in' && timemark.value) out.push(`timeIndex:${timemark.value}`);
+  FACETS.forEach(f => Object.entries(picks[f.type]).forEach(([key, s]) => { if (s === state) out.push(`${f.type}:${key}`); }));
+  return out.join(',');
+}
+
+function filterQuery(): Query {
+  return { stage: stage.value, minCount: String(minCount.value), tags: tagList('in'), excludeTags: tagList('out') };
+}
+
+let generation = 0;
+
+async function load() {
+  if (!stage.value) return;
+  const gen = ++generation;
+  loading.value = true;
+  error.value = '';
+  try {
+    const q = filterQuery();
+    const [b, t, base] = await Promise.all([
+      strategyApi<LeaderboardData>('leaderboard', { ...q, sort: sort.value, limit: String(PAGE_SIZE), offset: String((page.value - 1) * PAGE_SIZE) }),
+      strategyApi<TagsData>('tags', q),
+      strategyApi<TagsData>('tags', { stage: stage.value, minCount: String(minCount.value) }),
+    ]);
+    if (gen !== generation) return;
+    board.value = b.data;
+    tags.value = t.data;
+    baseTags.value = base.data;
+    seasonId.value = b.data.seasonId;
+    stale.value = b.stale || t.stale;
+    fetchedAt.value = Math.min(b.fetchedAt, t.fetchedAt);
+    void nameCostItems(t.data);
+    void loadKits(b.data.items, stage.value);
+  } catch (e) {
+    if (gen === generation) error.value = String(e);
+  } finally {
+    if (gen === generation) loading.value = false;
+  }
+}
+
+async function loadStages() {
+  try {
+    const r = await strategyApi<StageOptions>('stage-options');
+    stages.value = r.data.options.map(o => o.value);
+    seasonId.value = r.data.seasonId;
+    const latest = [...stages.value].reverse().find(s => s.startsWith('week')) ?? stages.value[stages.value.length - 1];
+    stage.value = latest ?? 'legacy';
+  } catch (e) {
+    error.value = String(e);
+  }
+}
+
+async function nameCostItems(t: TagsData) {
+  const ids = (t.filters.costItem?.items ?? []).map(i => i.key);
+  const info = await itemInfo(ids);
+  const m = new Map(itemNames.value);
+  ids.forEach(id => m.set(id, info.get(id)?.name || `Item ${id}`));
+  itemNames.value = m;
+}
+
+// Compasses and astrolabes a strategy uses in at least half of its maps.
+async function loadKits(items: StrategyRow[], st: string) {
+  for (const row of items) {
+    if (kits.has(`${st}:${row.key}`)) continue;
+    const d = await fetchDetail(st, row.key);
+    if (!d || st !== stage.value) continue;
+    const info = await itemInfo(d.items.cost.map(c => c.id));
+    const used = d.items.cost
+      .filter(c => c.quantity >= d.strategy.count / 2)
+      .sort((a, b) => b.quantity - a.quantity)
+      .map(c => {
+        const name = info.get(c.id)?.name || `Item ${c.id}`;
+        return { id: c.id, name, kind: itemKind(name) };
+      });
+    kits.set(`${st}:${row.key}`, used.filter((u): u is { id: string; name: string; kind: 'compass' | 'astrolabe' } => u.kind !== 'other'));
+  }
+}
+
+function slotsFor(key: string) {
+  const kit = kits.get(`${stage.value}:${key}`);
+  const fill = (kind: 'compass' | 'astrolabe', n: number) => {
+    const got = (kit ?? []).filter(k => k.kind === kind).slice(0, n);
+    return Array.from({ length: n }, (_, i) => got[i]
+      ? { ...got[i] }
+      : { id: '', name: kit ? `No ${kind}` : 'Loading…', kind });
+  };
+  return [...fill('compass', COMPASS_SLOTS), ...fill('astrolabe', ASTROLABE_SLOTS)];
+}
+
+const rows = computed(() => {
+  const items = board.value?.items ?? [];
+  const top = Math.max(1, ...items.map(r => r.score));
+  return items.map(r => {
+    const slots = slotsFor(r.key);
+    const used = slots.filter(s => s.id).map(s => s.name);
+    return {
+      raw: r,
+      key: r.key,
+      rank: r.rank,
+      title: treeList(r.talentLabel) || 'No main talent',
+      area: areaName(r.mapLabel),
+      time: timeName(r.timeLabel),
+      slots,
+      slotsLabel: used.length ? used.join(', ') : 'No compasses or astrolabes',
+      score: r.score.toFixed(1),
+      scoreBar: Math.round((r.score / top) * 100) + '%',
+      maps: r.count,
+      perMap: '+' + Math.round(r.avgEarnings),
+      perMin: r.avgEfficiency.toFixed(1),
+      dur: fmtDur(r.avgDuration / 1000),
+    };
+  });
+});
+
+const pages = computed(() => Math.max(1, Math.ceil((board.value?.total ?? 0) / PAGE_SIZE)));
+
+function labelFor(type: FacetType, key: string): string {
+  if (type === 'area') return areaName(key);
+  if (type === 'gameplay') return mechanicName(key);
+  if (type === 'mainTalent') return talentText(key);
+  return itemNames.value.get(key) ?? `Item ${key}`;
+}
+
+const facets = computed(() => {
+  const q = facetQuery.value.trim().toLowerCase();
+  return FACETS.map(f => {
+    const items: FilterItem[] = (tags.value?.filters[f.type]?.items ?? []).filter(i => !isJunkKey(i.key));
+    // Keep picked values visible even when the current filters leave them no maps.
+    Object.keys(picks[f.type]).forEach(key => {
+      if (!items.some(i => i.key === key)) items.push({ key, label: key, count: 0, strategyCount: 0, hotRate: 0 });
+    });
+    const all = items
+      .map(i => ({ key: i.key, label: labelFor(f.type, i.key), share: i.hotRate || 0, state: picks[f.type][i.key] ?? '' }))
+      .filter(v => !q || v.label.toLowerCase().includes(q));
+    const limit = q || expanded.has(f.type) ? all.length : FACET_ROWS;
+    const shown = all.filter((v, i) => i < limit || v.state);
+    return { ...f, total: all.length, values: shown, hidden: all.length - shown.length };
+  }).filter(f => f.total > 0 || !q);
+});
+
+const timemarks = computed(() => {
+  const items = baseTags.value?.filters.timeIndex?.items ?? [];
+  return TIMEMARKS.map(t => {
+    const hit = items.find(i => i.key === t.key);
+    const share = t.key === '' ? '' : hit ? `${hit.hotRate.toFixed(1)}%` : baseTags.value ? 'no data' : '';
+    return { ...t, share, disabled: t.key !== '' && !!baseTags.value && !hit && timemark.value !== t.key };
+  });
+});
+
+const active = computed(() =>
+  FACETS.flatMap(f => Object.entries(picks[f.type]).map(([key, state]) => ({ type: f.type, key, state, label: labelFor(f.type, key) }))),
+);
+
+function toggle(type: FacetType, key: string, state: State, single: boolean) {
+  const cur = picks[type][key];
+  if (single && state === 'in') {
+    Object.keys(picks[type]).forEach(k => { if (picks[type][k] === 'in') delete picks[type][k]; });
+  }
+  if (cur === state) delete picks[type][key];
+  else picks[type][key] = state;
+}
+
+function clearFilters() {
+  FACETS.forEach(f => Object.keys(picks[f.type]).forEach(k => delete picks[f.type][k]));
+}
+
+let debounce: ReturnType<typeof setTimeout> | null = null;
+function scheduleLoad() {
+  if (debounce) clearTimeout(debounce);
+  debounce = setTimeout(load, 250);
+}
+
+watch([stage, timemark, sort, minCount, () => JSON.stringify(picks)], () => {
+  if (!Number.isFinite(minCount.value) || minCount.value < 1) minCount.value = 1;
+  page.value = 1;
+  scheduleLoad();
+});
+watch(page, scheduleLoad);
+
+let ticker: ReturnType<typeof setInterval> | null = null;
+onMounted(async () => {
+  ticker = setInterval(() => { now.value = Date.now(); }, 30_000);
+  await loadStages();
+});
+onUnmounted(() => {
+  if (ticker) clearInterval(ticker);
+  if (debounce) clearTimeout(debounce);
+});
+</script>
+
+<style scoped>
+.st { flex: 1; min-height: 0; display: flex; }
+.st-filters { width: 290px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
+.st-search { padding: 12px 12px 8px; }
+.st-facets { flex: 1; min-height: 0; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 14px; }
+.st-facet { display: flex; flex-direction: column; gap: 4px; }
+.st-facet .head { display: flex; justify-content: space-between; align-items: baseline; }
+.st-facet .note { font-size: 10px; color: var(--faint); }
+.st-value { position: relative; display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; overflow: hidden; background: var(--panel); border: 1px solid var(--panel-border); }
+.st-value.in { background: var(--accent-bg); border-color: var(--accent-border); }
+.st-value.out { border-color: var(--neg); }
+.st-value .bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-bg); opacity: 0.6; }
+.st-value .label { position: relative; flex: 1; min-width: 0; font-size: 11.5px; line-height: 1.3; color: var(--strong); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.st-value.out .label { color: var(--faint); text-decoration: line-through; }
+.st-value .share { position: relative; font-size: 10px; color: var(--label); }
+.st-value .btns { position: relative; display: flex; gap: 2px; }
+.st-value .btns button { width: 18px; height: 18px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; cursor: pointer; background: var(--chip); border: 1px solid var(--chip-border); color: var(--muted); }
+.st-value .btns .inc.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.st-value .btns .exc.on { background: var(--neg); border-color: var(--neg); color: #fff; }
+.st-more, .st-link { align-self: flex-start; padding: 2px 6px; font-size: 11px; background: none; border: none; color: var(--accent); cursor: pointer; }
+.st-foot { padding: 10px 12px; border-top: 1px solid var(--line); font-size: 10px; line-height: 1.5; color: var(--label); }
+
+.st-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.st-top { padding: 12px 16px 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.st-top .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
+.st-marks { display: flex; gap: 4px; flex-wrap: wrap; }
+.st-mark { display: flex; align-items: baseline; gap: 5px; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer; background: var(--chip); border: 1px solid var(--chip-border); color: var(--text); }
+.st-mark .mono { font-size: 10px; font-weight: 500; opacity: 0.75; }
+.st-mark.on { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-text); }
+.st-mark:disabled { cursor: default; opacity: 0.45; }
+.ctl { display: flex; align-items: center; gap: 6px; }
+.st-num { width: 46px; font-size: 12px; padding: 4px 6px; border-radius: 6px; background: var(--input); border: 1px solid var(--chip-border); color: var(--strong); text-align: center; outline: none; }
+.status { margin-left: auto; font-size: 10px; color: var(--label); }
+.status .warn { color: var(--gold); }
+.chips .count { margin-left: auto; color: var(--label); }
+.st-active { display: flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; font-size: 11px; cursor: pointer; background: var(--accent-bg); border: 1px solid var(--accent-border); color: var(--accent-text); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-active.out { background: transparent; border-color: var(--neg); color: var(--neg); }
+
+.st-head, .st-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) 92px 48px 64px 60px 50px; gap: 10px; align-items: center; }
+.st-head { padding: 8px 28px 4px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--label); }
+.st-list { flex: 1; min-height: 0; padding: 0 16px 8px; display: flex; flex-direction: column; gap: 4px; }
+.st-row { flex-shrink: 0; padding: 6px 12px; border-radius: 9px; text-align: left; font: inherit; font-size: 12px; color: var(--text); cursor: pointer; background: var(--panel); border: 1px solid var(--panel-border); }
+.st-row:hover { border-color: var(--accent-border); }
+.st-row .rank { font-weight: 700; color: var(--label); }
+.st-row .who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.st-row .title { font-weight: 600; color: var(--strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-row .meta { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.st-row .tag { font-size: 10px; padding: 0 6px; border-radius: 999px; background: rgba(217,119,6,0.12); color: var(--gold); }
+.st-row .tag.time { background: var(--chip); color: var(--muted); }
+.slots { display: flex; gap: 3px; margin-left: 4px; }
+.slot { width: 20px; height: 20px; box-sizing: border-box; border-radius: 5px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.slot img { width: 16px; height: 16px; object-fit: contain; }
+.slot.compass { background: rgba(217,119,6,0.14); border: 1px solid rgba(217,119,6,0.45); }
+.slot.astrolabe { background: rgba(139,92,246,0.14); border: 1px solid rgba(139,92,246,0.45); }
+.slot.empty { background: transparent; border: 1px dashed var(--chip-border); }
+.slot.gap { margin-left: 5px; }
+.st-row .score { display: flex; align-items: center; gap: 6px; }
+.st-row .track { flex: 1; height: 5px; border-radius: 3px; background: var(--chip-border); overflow: hidden; }
+.st-row .track span { display: block; height: 100%; background: var(--accent); }
+.st-row .score .mono { font-size: 11px; font-weight: 700; color: var(--strong); }
+.r { text-align: right; }
+.strong { font-weight: 700; }
+.faint { color: var(--faint); }
+.retry { margin: 10px auto 0; }
+.st-pager { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 8px 16px 12px; font-size: 11px; color: var(--muted); }
+.st-pager button:disabled { opacity: 0.45; cursor: default; }
+</style>

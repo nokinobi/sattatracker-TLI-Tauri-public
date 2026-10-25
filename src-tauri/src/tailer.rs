@@ -109,6 +109,7 @@ pub async fn start_tailing(
 ) {
     let mut parser = LogParser::new();
     let season_id = find_season_id(&log_path).await;
+    crate::strategy::set_season(season_id);
 
     let cache_path = app
         .path()

@@ -58,6 +58,7 @@
         <SessionTab v-else-if="tab === 'session'" :focus-map-id="focusMapId" />
         <InventoryTab v-else-if="tab === 'inventory'" />
         <PricesTab v-else-if="tab === 'prices'" />
+        <StrategiesTab v-else-if="tab === 'strategies'" />
       </div>
 
       <section v-if="showSettings" class="dash-settings" aria-label="Settings">
@@ -147,13 +148,14 @@ import OverviewTab from './OverviewTab.vue';
 import SessionTab from './SessionTab.vue';
 import InventoryTab from './InventoryTab.vue';
 import PricesTab from './PricesTab.vue';
+import StrategiesTab from './StrategiesTab.vue';
 
 const props = defineProps<{ isOpen: boolean }>();
 defineEmits(['close']);
 
 const store = useTrackerStore();
 
-type TabId = 'overview' | 'session' | 'inventory' | 'prices';
+type TabId = 'overview' | 'session' | 'inventory' | 'prices' | 'strategies';
 const tab = ref<TabId>('overview');
 const focusMapId = ref('');
 const confirmReset = ref(false);
@@ -172,6 +174,7 @@ const tabs = computed(() => [
   { id: 'session' as TabId, label: 'Session', badge: sessionMaps.value ? String(sessionMaps.value) : '' },
   { id: 'inventory' as TabId, label: 'Inventory', badge: '' },
   { id: 'prices' as TabId, label: 'Prices', badge: '' },
+  { id: 'strategies' as TabId, label: 'Strategies', badge: '' },
 ]);
 
 const logFound = ref(true);
