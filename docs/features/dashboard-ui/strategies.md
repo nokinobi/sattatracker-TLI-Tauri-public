@@ -37,7 +37,7 @@ The filters, search, page, period, the open strategy and its view (Loot & cost o
 
 ![Favorites](img/strategy-favorites.png)
 
-- **Save a strategy:** click the star on its row, or **Save to favorites** in its detail. Click again (**In favorites**) to remove it.
+- **Save a strategy:** click the star on its row, or **Save to favorites** in its detail. Click again (**In favorites**) to remove it. A favorite belongs to the period it was saved from: the same strategy in another week is starred separately, with its own note.
 - **Note:** a saved strategy's detail has a **Your note** box under the header, for why you saved it, what to try or how it went (up to 500 characters). It's saved as you type.
 - **Favorites list:** the **Ladder / Favorites** switch at the top of the list shows your saved strategies, newest first, with your note, the period they're from and when you saved them. The numbers are the ones the strategy had when you saved it. The filters on the left apply to the ladder only and are dimmed while favorites are shown.
 - Click a favorite to open its detail for the period it was saved from. If the server no longer has that strategy (an older period or season), the detail says so; the note and the saved numbers stay.

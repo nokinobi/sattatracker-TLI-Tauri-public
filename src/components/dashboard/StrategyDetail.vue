@@ -162,7 +162,7 @@ const rareOnly = ref(false);
 // Remembered with the rest of the Strategies tab, so a reopened detail shows the same view.
 const view = detailView;
 
-const fav = computed(() => favoriteOf(props.row.key));
+const fav = computed(() => favoriteOf(props.row.key, props.stage));
 const savedText = computed(() => (fav.value?.savedAt ? fmtDate(fav.value.savedAt) : ''));
 
 let noteTimer: ReturnType<typeof setTimeout> | null = null;
@@ -170,7 +170,7 @@ let pendingNote: string | null = null;
 function flushNote() {
   if (noteTimer) clearTimeout(noteTimer);
   noteTimer = null;
-  if (pendingNote !== null) setNote(props.row.key, pendingNote);
+  if (pendingNote !== null) setNote(props.row.key, props.stage, pendingNote);
   pendingNote = null;
 }
 function onNote(e: Event) {
