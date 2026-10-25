@@ -1,3 +1,4 @@
+mod applog;
 mod assets;
 mod bag_manager;
 mod db;
@@ -162,6 +163,10 @@ pub fn run() {
         )
         .setup(move |app| {
             use std::str::FromStr;
+
+            if let Ok(dir) = app.path().app_local_data_dir() {
+                applog::init(dir.join("logs"), &app.package_info().version.to_string());
+            }
             use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
             use tauri::menu::{Menu, MenuItem};
@@ -244,6 +249,7 @@ pub fn run() {
             state_store::save_state,
             state_store::load_state,
             strategy::strategy_api,
+            applog::log_event,
             strategy::get_item_info,
         ])
         .run(tauri::generate_context!())

@@ -232,6 +232,7 @@ impl PricingManager {
                 Ok(resp) => last_err = format!("{}: HTTP {}", url, resp.status()),
                 Err(e) => last_err = format!("{}: {}", url, e),
             }
+            crate::applog::warn("pricing", &last_err);
         }
         Err(last_err)
     }

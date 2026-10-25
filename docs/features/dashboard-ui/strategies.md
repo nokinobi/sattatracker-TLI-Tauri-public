@@ -55,6 +55,8 @@ The data has totals per strategy, not single maps, so the loot can't be split by
 
 - Requests go through the tracker's back end to the strategy server's read-only endpoints. Answers are kept for 5 minutes (strategy details for 30), and saved answers are shown when the server fails.
 - Player names and IDs are removed from every answer before it reaches the window.
+- There are two strategy servers. The tracker asks the one that answered last first, and moves on to the other when a server fails or sends a web page (a bot check) instead of data.
+- Every request is written to the tracker's log, `%LOCALAPPDATA%\com.fedin.sattatracker\logs\tracker.log`: from cache or from which server, the HTTP status, the time it took, and the reason when it failed. The log rolls over at 1 MB and keeps two older files (`tracker.1.log`, `tracker.2.log`).
 - English names for talents, constellations, areas and timemarks are bundled with the tracker; constellation layouts too (about 90 KB).
 
 ## Code

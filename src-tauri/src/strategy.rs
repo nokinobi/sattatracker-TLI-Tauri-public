@@ -43,6 +43,20 @@ struct Entry {
 
 lazy_static! {
     static ref CACHE: Mutex<HashMap<String, Entry>> = Mutex::new(HashMap::new());
+    static ref PREFERRED: Mutex<Option<String>> = Mutex::new(None);
+}
+
+// Servers to try, the one that answered last first. A server can sit behind a bot check
+// for a while (it answers with a script page), and asking it first costs every call a second.
+fn bases() -> Vec<String> {
+    let mut list = crate::pricing::api_bases();
+    if let Some(p) = PREFERRED.lock().unwrap().clone() {
+        if let Some(i) = list.iter().position(|b| *b == p) {
+            let b = list.remove(i);
+            list.insert(0, b);
+        }
+    }
+    list
 }
 
 static SEASON: AtomicU32 = AtomicU32::new(0);
@@ -110,10 +124,47 @@ fn strip_private(v: &mut Value) {
     }
 }
 
-async fn fetch(endpoint: &str, params: &[(String, String)]) -> Result<Value, String> {
+// Short description of a request for the log: long tag lists (a mechanic is ~35 talent
+// ids) become counts per type.
+fn describe(endpoint: &str, params: &[(String, String)]) -> String {
+    let parts: Vec<String> = params
+        .iter()
+        .map(|(k, v)| {
+            if k != "tags" && k != "excludeTags" {
+                return format!("{}={}", k, v);
+            }
+            let mut counts: Vec<(String, usize)> = Vec::new();
+            for t in v.split(',') {
+                let kind = t.split(':').next().unwrap_or("").to_string();
+                match counts.iter_mut().find(|(c, _)| *c == kind) {
+                    Some((_, n)) => *n += 1,
+                    None => counts.push((kind, 1)),
+                }
+            }
+            let list: Vec<String> = counts
+                .iter()
+                .map(|(c, n)| format!("{}({})", c, n))
+                .collect();
+            format!("{}=[{}]", k, list.join(" "))
+        })
+        .collect();
+    format!("{} {}", endpoint, parts.join(" "))
+}
+
+fn snippet(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(&bytes[..bytes.len().min(200)]).to_string()
+}
+
+const BUSY: &str = "The strategy server is busy, try again in a minute";
+
+async fn fetch(endpoint: &str, params: &[(String, String)], what: &str) -> Result<Value, String> {
     let client = crate::net::client(Duration::from_secs(15))?;
     let mut last_err = String::from("no strategy server reachable");
-    for base in crate::pricing::api_bases() {
+    for base in bases() {
+        let host = reqwest::Url::parse(&base)
+            .ok()
+            .and_then(|u| u.host_str().map(str::to_string))
+            .unwrap_or_else(|| base.clone());
         let mut url = match reqwest::Url::parse(&format!("{}/api/strategy/{}", base, endpoint)) {
             Ok(u) => u,
             Err(e) => {
@@ -122,42 +173,79 @@ async fn fetch(endpoint: &str, params: &[(String, String)]) -> Result<Value, Str
             }
         };
         url.query_pairs_mut().extend_pairs(params);
+        let started = Instant::now();
+        let ms = || started.elapsed().as_millis();
+        let log_fail = |reason: String| {
+            crate::applog::warn(
+                "strategy",
+                &format!("{} via {}: {} after {} ms", what, host, reason, ms()),
+            );
+        };
         let resp = match client.get(url).send().await {
             Ok(r) => r,
             Err(e) => {
+                log_fail(format!("request failed ({})", e));
                 last_err = e.to_string();
                 continue;
             }
         };
         let status = resp.status();
-        match status.as_u16() {
-            429 => {
-                last_err = "The strategy server is rate limiting requests, try again in a minute"
-                    .to_string();
-                continue;
-            }
-            // The server answers 503 with "策略查询繁忙" (strategy query busy) when it sheds load.
-            502..=504 | 520..=524 => {
-                last_err = "The strategy server is busy, try again in a minute".to_string();
-                continue;
-            }
-            _ if !status.is_success() => {
-                last_err = format!("Strategy server answered {}", status);
-                continue;
-            }
-            _ => {}
+        if !status.is_success() {
+            let body = crate::net::read_limited(resp, MAX_BODY_BYTES)
+                .await
+                .unwrap_or_default();
+            log_fail(format!("HTTP {} {}", status.as_u16(), snippet(&body)));
+            last_err = match status.as_u16() {
+                429 => "The strategy server is rate limiting requests, try again in a minute"
+                    .to_string(),
+                // The server answers 503 with a "strategy query busy" message when it sheds load.
+                502..=504 | 520..=524 => BUSY.to_string(),
+                _ => format!("Strategy server answered {}", status),
+            };
+            continue;
         }
-        let bytes = crate::net::read_limited(resp, MAX_BODY_BYTES).await?;
-        let mut body: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+        let bytes = match crate::net::read_limited(resp, MAX_BODY_BYTES).await {
+            Ok(b) => b,
+            Err(e) => {
+                log_fail(format!("reading the answer failed ({})", e));
+                last_err = e;
+                continue;
+            }
+        };
+        let mut body: Value = match serde_json::from_slice(&bytes) {
+            Ok(v) => v,
+            Err(e) => {
+                log_fail(format!("answer is not JSON ({}): {}", e, snippet(&bytes)));
+                last_err =
+                    "The strategy server answered with a web page instead of data".to_string();
+                continue;
+            }
+        };
         if body.get("success").and_then(Value::as_bool) == Some(false) {
-            let message = body.get("message").and_then(Value::as_str).unwrap_or("");
-            last_err = if message.contains("繁忙") {
-                "The strategy server is busy, try again in a minute".to_string()
+            let message = body
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            log_fail(format!("server error: {}", message));
+            last_err = if message.contains('\u{7e41}') {
+                BUSY.to_string()
             } else {
                 format!("Strategy server returned an error: {}", message)
             };
             continue;
         }
+        *PREFERRED.lock().unwrap() = Some(base.clone());
+        crate::applog::info(
+            "strategy",
+            &format!(
+                "{} via {}: OK in {} ms, {} bytes",
+                what,
+                host,
+                ms(),
+                bytes.len()
+            ),
+        );
         let mut data = body.get_mut("data").map(Value::take).unwrap_or(Value::Null);
         strip_private(&mut data);
         return Ok(data);
@@ -172,14 +260,22 @@ pub async fn strategy_api(
     endpoint: String,
     query: HashMap<String, String>,
 ) -> Result<Value, String> {
-    let params = validate(&endpoint, &query)?;
+    let params = validate(&endpoint, &query).map_err(|e| {
+        crate::applog::warn("strategy", &format!("rejected {} request: {}", endpoint, e));
+        e
+    })?;
     let key = cache_key(&endpoint, &params);
     let now_ms = chrono_ms();
+    let what = describe(&endpoint, &params);
 
     {
         let cache = CACHE.lock().unwrap();
         if let Some(e) = cache.get(&key) {
             if e.at.elapsed() < ttl(&endpoint) {
+                crate::applog::info(
+                    "strategy",
+                    &format!("{}: from cache ({} s old)", what, e.at.elapsed().as_secs()),
+                );
                 return Ok(
                     json!({ "data": e.body, "fetchedAt": now_ms - e.at.elapsed().as_millis() as i64, "stale": false }),
                 );
@@ -187,7 +283,7 @@ pub async fn strategy_api(
         }
     }
 
-    match fetch(&endpoint, &params).await {
+    match fetch(&endpoint, &params, &what).await {
         Ok(data) => {
             let mut cache = CACHE.lock().unwrap();
             if cache.len() >= MAX_CACHE_ENTRIES {
@@ -211,10 +307,27 @@ pub async fn strategy_api(
         Err(err) => {
             let cache = CACHE.lock().unwrap();
             match cache.get(&key) {
-                Some(e) => Ok(
-                    json!({ "data": e.body, "fetchedAt": now_ms - e.at.elapsed().as_millis() as i64, "stale": true }),
-                ),
-                None => Err(err),
+                Some(e) => {
+                    crate::applog::warn(
+                        "strategy",
+                        &format!(
+                            "{}: all servers failed ({}), showing the saved answer from {} s ago",
+                            what,
+                            err,
+                            e.at.elapsed().as_secs()
+                        ),
+                    );
+                    Ok(
+                        json!({ "data": e.body, "fetchedAt": now_ms - e.at.elapsed().as_millis() as i64, "stale": true }),
+                    )
+                }
+                None => {
+                    crate::applog::error(
+                        "strategy",
+                        &format!("{}: all servers failed: {}", what, err),
+                    );
+                    Err(err)
+                }
             }
         }
     }
