@@ -87,6 +87,7 @@
         </div>
       </div>
 
+      <div :class="['st-progress', { on: loading }]" role="progressbar" aria-label="Loading strategies" :aria-hidden="!loading"><span></span></div>
       <div class="st-head">
         <span>#</span><span>Strategy</span><span>Score</span><span class="r">Maps</span><span class="r">FE / map</span><span class="r">FE / min</span><span class="r">Time</span>
       </div>
@@ -213,7 +214,10 @@ function filterQuery(): Query {
 let generation = 0;
 
 async function load() {
-  if (!stage.value) return;
+  if (!stage.value) {
+    loading.value = false;
+    return;
+  }
   const gen = ++generation;
   loading.value = true;
   error.value = '';
@@ -369,6 +373,7 @@ function clearFilters() {
 let debounce: ReturnType<typeof setTimeout> | null = null;
 function scheduleLoad() {
   if (debounce) clearTimeout(debounce);
+  loading.value = true;
   debounce = setTimeout(load, 250);
 }
 
@@ -428,6 +433,11 @@ onUnmounted(() => {
 .st-active { display: flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; font-size: 11px; cursor: pointer; background: var(--accent-bg); border: 1px solid var(--accent-border); color: var(--accent-text); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-active.out { background: transparent; border-color: var(--neg); color: var(--neg); }
 
+.st-progress { position: relative; height: 2px; margin-top: -1px; overflow: hidden; }
+.st-progress span { position: absolute; top: 0; bottom: 0; left: 0; width: 35%; background: var(--accent); opacity: 0; transform: translateX(-100%); }
+.st-progress.on span { opacity: 1; animation: st-sweep 1.1s ease-in-out infinite; }
+@keyframes st-sweep { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+@media (prefers-reduced-motion: reduce) { .st-progress.on span { animation: none; width: 100%; transform: none; opacity: 0.6; } }
 .st-head, .st-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) 92px 48px 64px 60px 50px; gap: 10px; align-items: center; }
 .st-head { padding: 8px 28px 4px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--label); }
 .st-list { flex: 1; min-height: 0; padding: 0 16px 8px; display: flex; flex-direction: column; gap: 4px; }
