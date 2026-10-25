@@ -67,6 +67,11 @@ export const useTrackerStore = defineStore('tracker', {
 
     widgetOpacity: 0.9,
 
+    compactWindowOpacity: 0.88,
+    compactWindowFontScale: 1,
+    compactHighValueThreshold: 100,
+    compactHighValueEffect: 'both' as 'glow' | 'pop' | 'both' | 'off',
+
     fxDuration: 4.0,
 
     fxX: 50,
@@ -136,6 +141,7 @@ export const useTrackerStore = defineStore('tracker', {
 
       mapTimer: { x: 800, y: 50, show: true, w: undefined as number|undefined, h: undefined as number|undefined },
       mapExpense: { x: 50, y: 400, show: true, w: undefined as number|undefined, h: undefined as number|undefined },
+      compactWindow: { x: 60, y: 120, show: false, w: 300 as number|undefined, h: 280 as number|undefined },
       itemsHistory: { x: 200, y: 100, show: false, w: 800, h: 600 }
     }
   }),
@@ -483,6 +489,10 @@ export const useTrackerStore = defineStore('tracker', {
         dropFxStyle: this.dropFxStyle,
         extraFxStyle: this.extraFxStyle,
         widgetOpacity: this.widgetOpacity,
+        compactWindowOpacity: this.compactWindowOpacity,
+        compactWindowFontScale: this.compactWindowFontScale,
+        compactHighValueThreshold: this.compactHighValueThreshold,
+        compactHighValueEffect: this.compactHighValueEffect,
         fxDuration: this.fxDuration,
         fxX: this.fxX,
         fxY: this.fxY,
@@ -506,6 +516,10 @@ export const useTrackerStore = defineStore('tracker', {
         if (parsed.dropFxStyle) this.dropFxStyle = parsed.dropFxStyle;
         if (parsed.extraFxStyle) this.extraFxStyle = parsed.extraFxStyle;
         if (typeof parsed.widgetOpacity === 'number') this.widgetOpacity = parsed.widgetOpacity;
+        if (typeof parsed.compactWindowOpacity === 'number') this.compactWindowOpacity = parsed.compactWindowOpacity;
+        if (typeof parsed.compactWindowFontScale === 'number') this.compactWindowFontScale = parsed.compactWindowFontScale;
+        if (typeof parsed.compactHighValueThreshold === 'number') this.compactHighValueThreshold = parsed.compactHighValueThreshold;
+        if (['glow', 'pop', 'both', 'off'].includes(parsed.compactHighValueEffect)) this.compactHighValueEffect = parsed.compactHighValueEffect;
         if (typeof parsed.fxDuration === 'number') this.fxDuration = parsed.fxDuration;
         if (typeof parsed.fxX === 'number') this.fxX = parsed.fxX;
         if (typeof parsed.fxY === 'number') this.fxY = parsed.fxY;
@@ -513,6 +527,7 @@ export const useTrackerStore = defineStore('tracker', {
         if (typeof parsed.pauseTimerOnHub === 'boolean') this.pauseTimerOnHub = parsed.pauseTimerOnHub;
         if (parsed.widgetPositions) {
           this.widgetPositions = { ...this.widgetPositions, ...parsed.widgetPositions };
+          delete (this.widgetPositions as any).compactMap;
         }
         if (parsed.blockedItemIds) this.blockedItemIds = parsed.blockedItemIds;
         if (typeof parsed.lowStockEnabled === 'boolean') this.lowStockEnabled = parsed.lowStockEnabled;
