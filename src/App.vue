@@ -134,6 +134,8 @@
 
         <MapHistory :isOpen="isMapHistoryOpen" @close="isMapHistoryOpen = false" />
 
+        <DashboardWindow :isOpen="isDashboardOpen" @close="isDashboardOpen = false" />
+
       </template>
     </template>
 
@@ -171,6 +173,7 @@ import ControlPanel         from './components/ControlPanel.vue';
 import LootFeed             from './components/LootFeed.vue';
 import ItemsHistory         from './components/ItemsHistory.vue';
 import MapHistory           from './components/MapHistory.vue';
+import DashboardWindow      from './components/dashboard/DashboardWindow.vue';
 import ExtraEffectsOverlay  from './components/ExtraEffectsOverlay.vue';
 import PhysicsEffectsOverlay from './components/PhysicsEffectsOverlay.vue';
 import DebugPanel           from './components/DebugPanel.vue';
@@ -184,6 +187,7 @@ const themeStore = useThemeStore();
 const isSettingsOpen          = ref(false);
 const isHistoryOpen           = ref(false);
 const isMapHistoryOpen        = ref(false);
+const isDashboardOpen         = ref(false);
 const isBuilderOpen           = ref(false);
 const settingsOpenedFromBuilder = ref(false);
 const showDebug       = ref(false);
@@ -220,6 +224,7 @@ const widgetOnlyId = (() => {
 })();
 
 let unlistenEditMode: (() => void) | null = null;
+let unlistenDashboard: (() => void) | null = null;
 let unlistenGame:     (() => void) | null = null;
 let timerInterval:    ReturnType<typeof setInterval> | null = null;
 let saveInterval:     ReturnType<typeof setInterval> | null = null;
@@ -238,13 +243,14 @@ function onSettingsClose() {
 
 const keydownHandler = (e: KeyboardEvent) => {
   if (e.key === 'F8') isBuilderOpen.value = !isBuilderOpen.value;
+  if (e.key === 'Escape' && isDashboardOpen.value) isDashboardOpen.value = false;
 };
 
 let lastClickThrough = true;
 let clickThroughInterval: ReturnType<typeof setInterval> | null = null;
 
 async function updateClickThrough() {
-  if (store.isEditMode || isSettingsOpen.value || isHistoryOpen.value || isMapHistoryOpen.value || isBuilderOpen.value) {
+  if (store.isEditMode || isSettingsOpen.value || isHistoryOpen.value || isMapHistoryOpen.value || isBuilderOpen.value || isDashboardOpen.value) {
     if (lastClickThrough) { lastClickThrough = false; await invoke('set_click_through', { ignore: false }); }
     return;
   }
@@ -329,6 +335,10 @@ onMounted(async () => {
   store.loadConfigFromStorage();
   themeStore.loadFromStorage();
 
+  unlistenDashboard = await listen('toggle_dashboard', () => {
+    isDashboardOpen.value = !isDashboardOpen.value;
+  });
+
   unlistenEditMode = await listen('toggle_edit_mode', () => {
     isBuilderOpen.value = !isBuilderOpen.value;
   });
@@ -351,6 +361,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (unlistenEditMode)      unlistenEditMode();
+  if (unlistenDashboard)     unlistenDashboard();
   if (unlistenGame)          unlistenGame();
   if (timerInterval)         clearInterval(timerInterval);
   if (clickThroughInterval)  clearInterval(clickThroughInterval);
