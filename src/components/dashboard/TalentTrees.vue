@@ -3,9 +3,9 @@
     <div class="tt-groups" role="tablist" aria-label="Talent constellations">
       <div class="tt-group">
         <div class="tt-label">
-          <span class="dash-label">Mechanics</span>
-          <span class="mono count">{{ mechanics.length }} / {{ MAX_MECHANICS }}</span>
-          <span class="sum">· {{ mechanicPoints }} points</span>
+          <span class="dash-label">Points required</span>
+          <span class="mono count">{{ mechanicPoints }}</span>
+          <span class="sum">in {{ mechanics.length }} {{ mechanics.length === 1 ? 'constellation' : 'constellations' }}</span>
         </div>
         <div class="tt-row">
           <button
@@ -20,14 +20,14 @@
             <span class="nm">{{ t.name }}</span>
             <span class="mono pt">{{ t.points }}</span>
           </button>
-          <span v-for="i in freeSlots" :key="'free' + i" class="tt-hex free" title="Free mechanic slot">Free slot</span>
         </div>
       </div>
       <div class="tt-divider"></div>
       <div class="tt-group">
         <div class="tt-label">
           <span class="dash-label">Profound</span>
-          <span class="sum">separate · {{ profound.points }} points</span>
+          <span class="mono count">{{ profound.points }}</span>
+          <span class="sum">points, counted separately</span>
         </div>
         <div class="tt-row">
           <button
@@ -84,8 +84,6 @@ import { PROFOUND, TREES, placePoints } from './strategies/trees';
 const props = defineProps<{ talents: { key: string; count: number }[] }>();
 
 const NODE_R = [44, 22, 34, 46];
-// The game allows four mechanic constellations at once; Profound is a separate slot.
-const MAX_MECHANICS = 4;
 
 const picked = computed(() => new Map(props.talents.map(t => [t.key, t.count])));
 
@@ -101,7 +99,6 @@ const mechanics = computed(() =>
     .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name)),
 );
 const mechanicPoints = computed(() => mechanics.value.reduce((s, t) => s + t.points, 0));
-const freeSlots = computed(() => Math.max(0, MAX_MECHANICS - mechanics.value.length));
 const profound = computed(() => ({ points: placements.value.get(PROFOUND)?.points ?? 0 }));
 
 const current = ref('');
@@ -151,16 +148,15 @@ const view = computed(() => {
 .tt-groups { display: flex; align-items: flex-end; gap: 24px; }
 .tt-group { display: flex; flex-direction: column; gap: 6px; }
 .tt-label { display: flex; align-items: baseline; gap: 8px; font-size: 11px; color: var(--muted); }
-.tt-label .count { font-size: 12px; font-weight: 700; color: var(--strong); }
+.tt-label .count { font-size: 14px; font-weight: 700; color: var(--strong); }
 .tt-divider { width: 1px; align-self: stretch; background: var(--line); }
-.tt-row { display: flex; gap: 6px; }
+.tt-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .tt-hex { width: 92px; box-sizing: border-box; aspect-ratio: 1 / 0.9; clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 0 6px; text-align: center; font-size: 10.5px; font-weight: 600; line-height: 1.15; background: var(--chip-border); color: var(--label); }
 .tt-hex .pt { font-size: 10.5px; font-weight: 700; padding: 0 6px; border-radius: 999px; background: var(--text); color: var(--panel); }
 .tt-hex.used { background: rgba(20,184,166,0.28); color: var(--strong); }
 .tt-hex.used .pt { background: #2dd4bf; color: #062925; }
 .tt-hex.on { background: var(--accent); color: #fff; }
-.tt-hex:hover:not(.on):not(.free) { filter: brightness(1.15); }
-.tt-hex.free { cursor: default; background: var(--chip); color: var(--faint); }
+.tt-hex:hover:not(.on) { filter: brightness(1.15); }
 
 .tt-view { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; min-height: 0; padding: 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-border); }
 .tt-svg { width: 100%; height: 300px; }
