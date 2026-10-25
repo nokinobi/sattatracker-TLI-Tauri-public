@@ -477,6 +477,16 @@ export const useTrackerStore = defineStore('tracker', {
       void this.saveStateToDisk();
     },
 
+    // Removes saved sessions and their maps (linked by MapRecord.sessionId). The current session is never touched.
+    deleteSessions(ids: string[]) {
+      const drop = new Set(ids.filter(id => id !== this.sessionId));
+      if (drop.size === 0) return;
+      this.archivedSessions = this.archivedSessions.filter(s => !drop.has(s.id));
+      this.mapHistory = this.mapHistory.filter(m => !drop.has(m.sessionId));
+      this.stateDirty = true;
+      void this.saveStateToDisk();
+    },
+
     updatePosition(widgetId: keyof typeof this.widgetPositions, x: number, y: number, w?: number, h?: number) {
       if (this.widgetPositions[widgetId]) {
         this.widgetPositions[widgetId].x = x;
