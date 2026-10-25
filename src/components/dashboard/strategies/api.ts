@@ -131,7 +131,8 @@ export function areaName(key: string): string {
 }
 
 export function timeName(key: string): string {
-  return TIMES[key] ?? `Time ${key}`;
+  // Unlisted keys are boss and season maps, already named by the area.
+  return TIMES[key] ?? '';
 }
 
 export function mechanicName(key: string): string {

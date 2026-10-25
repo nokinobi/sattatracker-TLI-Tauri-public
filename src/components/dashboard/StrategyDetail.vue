@@ -139,7 +139,7 @@ const title = computed(() => treeList(props.row.talentLabel) || 'No main talent'
 const place = computed(() => {
   const area = areaName(props.row.mapLabel);
   const time = timeName(props.row.timeLabel);
-  return area === time ? area : `${area} · ${time}`;
+  return !time || area === time ? area : `${area} · ${time}`;
 });
 const maps = computed(() => Math.max(1, detail.value?.strategy.count ?? props.row.count));
 

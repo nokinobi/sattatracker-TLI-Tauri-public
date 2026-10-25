@@ -129,22 +129,32 @@ async fn fetch(endpoint: &str, params: &[(String, String)]) -> Result<Value, Str
             }
         };
         let status = resp.status();
-        if status.as_u16() == 429 {
-            last_err = "The strategy server is rate limiting requests, try again in a minute".to_string();
-            continue;
-        }
-        if !status.is_success() {
-            last_err = format!("Strategy server answered {}", status);
-            continue;
+        match status.as_u16() {
+            429 => {
+                last_err = "The strategy server is rate limiting requests, try again in a minute"
+                    .to_string();
+                continue;
+            }
+            // The server answers 503 with "策略查询繁忙" (strategy query busy) when it sheds load.
+            502..=504 | 520..=524 => {
+                last_err = "The strategy server is busy, try again in a minute".to_string();
+                continue;
+            }
+            _ if !status.is_success() => {
+                last_err = format!("Strategy server answered {}", status);
+                continue;
+            }
+            _ => {}
         }
         let bytes = crate::net::read_limited(resp, MAX_BODY_BYTES).await?;
         let mut body: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
         if body.get("success").and_then(Value::as_bool) == Some(false) {
-            last_err = body
-                .get("message")
-                .and_then(Value::as_str)
-                .unwrap_or("Strategy server returned an error")
-                .to_string();
+            let message = body.get("message").and_then(Value::as_str).unwrap_or("");
+            last_err = if message.contains("繁忙") {
+                "The strategy server is busy, try again in a minute".to_string()
+            } else {
+                format!("Strategy server returned an error: {}", message)
+            };
             continue;
         }
         let mut data = body.get_mut("data").map(Value::take).unwrap_or(Value::Null);

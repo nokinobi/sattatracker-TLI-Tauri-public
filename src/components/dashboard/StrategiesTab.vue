@@ -23,7 +23,7 @@
         </section>
 
         <div class="st-pair">
-          <div class="st-sec">
+          <div class="st-sec rank">
             <span class="dash-label">Rank by</span>
             <div class="dash-seg" role="group" aria-label="Rank by">
               <button v-for="s in SORTS" :key="s.value" :class="{ on: sort === s.value }" @click="sort = s.value">{{ s.label }}</button>
@@ -90,8 +90,7 @@
           <span class="sub">{{ board ? `${board.total} strategies · ranked by ${sort === 'totalCount' ? 'maps run' : 'profit per hour'}` : '' }}</span>
           <span class="status">
             <template v-if="seasonId">Season {{ seasonId }} · </template>
-            <span v-if="error && board" class="warn">Couldn't refresh, showing earlier results · </span>
-            <span v-else-if="stale" class="warn">Server unreachable, showing saved data · </span>
+            <span v-if="stale && !error" class="warn">Server unreachable, showing saved data · </span>
             {{ fetchedAt ? `updated ${fmtAgo(fetchedAt, now)}` : '' }}
           </span>
           <label class="ctl">Period
@@ -99,6 +98,11 @@
               <option v-for="s in stages" :key="s" :value="s">{{ stageName(s) }}</option>
             </select>
           </label>
+        </div>
+        <div v-if="error && board" class="st-failed" role="alert">
+          <span>Couldn't load {{ heading.toLowerCase() }}{{ retrying ? ', trying again…' : '.' }} {{ error }}</span>
+          <span v-if="shownFor !== query" class="faint">The list below still shows the previous results.</span>
+          <button v-if="!retrying" class="st-link" @click="load">Retry</button>
         </div>
         <div v-if="active.length" class="row chips">
           <span class="faint">Filters:</span>
@@ -120,7 +124,7 @@
         <span>#</span><span>Strategy</span><span>Profit / hour</span><span class="r">Maps</span><span class="r">FE / map</span><span class="r">Time</span>
       </div>
       <div class="st-list dash-scroll">
-        <div v-if="error && !board" class="dash-empty">
+        <div v-if="error && !board && !retrying" class="dash-empty">
           <div>
             <div>Couldn't load strategies: {{ error }}</div>
             <button class="dash-btn small retry" @click="load">Try again</button>
@@ -134,7 +138,7 @@
             <span class="title" :title="r.title">{{ r.title }}</span>
             <span class="meta">
               <span class="tag">{{ r.area }}</span>
-              <span v-if="r.time !== r.area" class="tag time">{{ r.time }}</span>
+              <span v-if="r.time && r.time !== r.area" class="tag time">{{ r.time }}</span>
               <span class="slots" :aria-label="r.slotsLabel">
                 <span
                   v-for="(s, i) in r.slots"
@@ -239,6 +243,11 @@ function filterQuery(): Query {
 }
 
 let generation = 0;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+const retrying = ref(false);
+// Query the visible results belong to, so a failed refresh can say they are older.
+const shownFor = ref('');
+const query = computed(() => JSON.stringify([stage.value, timemark.value, sort.value, minCount.value, picks, page.value]));
 
 async function load() {
   if (!stage.value) {
@@ -246,8 +255,9 @@ async function load() {
     return;
   }
   const gen = ++generation;
+  const forQuery = query.value;
   loading.value = true;
-  error.value = '';
+  if (retryTimer) clearTimeout(retryTimer);
   try {
     const q = filterQuery();
     const [b, t, base] = await Promise.all([
@@ -256,6 +266,9 @@ async function load() {
       strategyApi<TagsData>('tags', { stage: stage.value, minCount: String(minCount.value) }),
     ]);
     if (gen !== generation) return;
+    error.value = '';
+    retrying.value = false;
+    shownFor.value = forQuery;
     board.value = b.data;
     tags.value = t.data;
     baseTags.value = base.data;
@@ -265,7 +278,15 @@ async function load() {
     void nameCostItems(t.data);
     void loadKits(b.data.items, stage.value);
   } catch (e) {
-    if (gen === generation) error.value = String(e);
+    if (gen !== generation) return;
+    error.value = String(e);
+    // The server often sheds load for a moment; try once more before giving up.
+    if (!retrying.value) {
+      retrying.value = true;
+      retryTimer = setTimeout(() => { if (gen === generation) void load(); }, 4000);
+    } else {
+      retrying.value = false;
+    }
   } finally {
     if (gen === generation) loading.value = false;
   }
@@ -415,6 +436,7 @@ function toggleSection(section: Section) {
 let debounce: ReturnType<typeof setTimeout> | null = null;
 function scheduleLoad() {
   if (debounce) clearTimeout(debounce);
+  retrying.value = false;
   loading.value = true;
   debounce = setTimeout(load, 250);
 }
@@ -434,6 +456,7 @@ onMounted(async () => {
 onUnmounted(() => {
   if (ticker) clearInterval(ticker);
   if (debounce) clearTimeout(debounce);
+  if (retryTimer) clearTimeout(retryTimer);
 });
 </script>
 
@@ -447,8 +470,11 @@ onUnmounted(() => {
 .st-sec-head .chev.shut { transform: rotate(-90deg); }
 .st-sec-head .picked { margin-left: auto; font-size: 10.5px; font-weight: 600; color: var(--accent-text); }
 .st-sec-head .note { margin-left: auto; font-size: 10px; color: var(--faint); }
-.st-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.st-pair .dash-seg button { flex: 1; }
+.st-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+.st-pair .dash-seg button { flex: 1; white-space: nowrap; }
+.st-side .ctl { font-size: 11px; color: var(--muted); }
+.st-failed { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border-radius: 8px; font-size: 11px; color: var(--gold); background: rgba(217,119,6,0.08); border: 1px solid rgba(217,119,6,0.35); }
+.st-failed .st-link { padding: 0; }
 .none { font-size: 11px; color: var(--faint); padding: 2px 6px; }
 .st-value { position: relative; display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; overflow: hidden; cursor: pointer; background: var(--panel); border: 1px solid var(--panel-border); }
 .st-value:hover { border-color: var(--accent-border); }
