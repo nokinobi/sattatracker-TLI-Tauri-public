@@ -7,6 +7,7 @@ mod net;
 mod parser;
 mod pricing;
 mod state_store;
+mod strategy;
 mod tailer;
 mod utils;
 
@@ -242,6 +243,8 @@ pub fn run() {
             get_price_status,
             state_store::save_state,
             state_store::load_state,
+            strategy::strategy_api,
+            strategy::get_item_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -25,6 +25,18 @@ pub fn get_all_cached_prices() -> Vec<(String, f64)> {
     cache.iter().map(|(k, &v)| (k.clone(), v)).collect()
 }
 
+pub fn cached_price(item_id: &str) -> Option<f64> {
+    if item_id == "100300" {
+        return Some(1.0);
+    }
+    PRICE_CACHE.lock().unwrap().get(item_id).copied()
+}
+
+/// Base URLs of the price server, which also serves strategy data.
+pub(crate) fn api_bases() -> Vec<String> {
+    etor_bases()
+}
+
 pub fn clear_price_cache() {
     let mut cache = PRICE_CACHE.lock().unwrap();
     cache.clear();
