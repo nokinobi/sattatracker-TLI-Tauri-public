@@ -7,7 +7,9 @@ export interface Tree { n: TreeNode[]; l: [number, number][] }
 export const TREES = data as unknown as Record<string, Tree>;
 export const PROFOUND = '幽邃';
 
-export interface Placement { root: number; taken: Set<number>; points: number; unplaced: number }
+// `guessed`: taken nodes whose position the data can't confirm (an effect shared by several
+// nodes, only some of which were taken, off any required path).
+export interface Placement { root: number; taken: Set<number>; guessed: Set<number>; points: number; unplaced: number }
 
 // Strategy data only says "talent md5 × count", not which nodes. Medium and large
 // nodes are unique, so they are exact; small nodes sharing an effect are placed on
@@ -66,5 +68,10 @@ export function placePoints(tree: Tree, picked: Map<string, number>): Placement 
     if (left.has(md5)) left.set(md5, left.get(md5)! - 1);
   }
   const unplaced = [...left.values()].reduce((s, c) => s + Math.max(0, c), 0);
-  return { root, taken, points, unplaced };
+  const guessed = new Set<number>();
+  taken.forEach(i => {
+    const g = groups.get(tree.n[i][3]);
+    if (i !== root && !need.has(i) && g && g.some(j => !taken.has(j))) guessed.add(i);
+  });
+  return { root, taken, guessed, points, unplaced };
 }

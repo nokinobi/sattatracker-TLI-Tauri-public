@@ -70,6 +70,7 @@
           <span v-if="!e.big" class="mono n">×{{ e.count }}</span>
           <span>{{ e.text }}</span>
         </div>
+        <div v-if="view.guessed" class="hint"><span class="swatch"></span>{{ view.guessed }} node(s) at a guessed spot: the data says how many were taken, not which ones.</div>
         <div class="hint">Medium and large nodes are exact. Small nodes follow the shortest path, since the data only counts them.</div>
       </div>
     </div>
@@ -124,7 +125,7 @@ const view = computed(() => {
   }));
   const nodes = tree.n.map((n, i) => ({
     x: n[0], y: n[1], r: NODE_R[n[2]] ?? 22,
-    cls: n[2] === 0 ? 'start' : [p.taken.has(i) ? 'on' : '', n[2] === 3 ? 'large' : ''].join(' '),
+    cls: n[2] === 0 ? 'start' : [p.guessed.has(i) ? 'guess' : p.taken.has(i) ? 'on' : '', n[2] === 3 ? 'large' : ''].join(' '),
     text: n[2] === 0 ? 'Start' : talentText(n[3]),
   }));
 
@@ -139,7 +140,7 @@ const view = computed(() => {
   });
   const list = [...effects.values()].sort((a, b) => Number(b.big) - Number(a.big) || b.count - a.count);
 
-  return { name: treeName(current.value), points: p.points, unplaced: p.unplaced, box, links, nodes, list };
+  return { name: treeName(current.value), points: p.points, unplaced: p.unplaced, guessed: p.guessed.size, box, links, nodes, list };
 });
 </script>
 
@@ -165,6 +166,7 @@ const view = computed(() => {
 .nd { fill: var(--input); stroke: var(--faint); stroke-width: 5; }
 .nd.large { stroke-width: 9; }
 .nd.on { fill: var(--gold); stroke: var(--gold); }
+.nd.guess { fill: rgba(217,119,6,0.25); stroke: var(--gold); stroke-dasharray: 10 8; }
 .nd.start { fill: var(--accent); stroke: var(--accent-border); }
 .tt-side { max-height: 300px; display: flex; flex-direction: column; gap: 5px; font-size: 11.5px; line-height: 1.4; color: var(--text); }
 .tt-side .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
@@ -175,5 +177,7 @@ const view = computed(() => {
 .effect { display: flex; gap: 6px; }
 .effect .n { flex-shrink: 0; width: 26px; font-size: 10px; color: var(--label); }
 .effect.big { color: var(--gold); font-weight: 600; }
-.tt-side .hint { margin-top: auto; padding-top: 8px; font-size: 10px; color: var(--label); }
+.tt-side .hint { font-size: 10px; color: var(--label); }
+.tt-side .hint:first-of-type { margin-top: auto; padding-top: 8px; }
+.tt-side .swatch { display: inline-block; width: 9px; height: 9px; margin-right: 5px; border-radius: 50%; vertical-align: -1px; background: rgba(217,119,6,0.25); border: 1px dashed var(--gold); }
 </style>
