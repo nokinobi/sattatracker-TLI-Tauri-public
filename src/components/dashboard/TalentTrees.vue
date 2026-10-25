@@ -65,6 +65,10 @@
           <span class="mono pts">{{ view.points }} points</span>
         </div>
         <div v-if="view.unplaced" class="warn">{{ view.unplaced }} point(s) placed approximately</div>
+        <div v-if="current === PROFOUND" class="warn">
+          The community data records almost no large Profound nodes: 9 of the 11 never appear in any strategy.
+          Players likely took more Profound points than shown here.
+        </div>
         <div v-if="!view.list.length" class="none">No points in this constellation</div>
         <div v-for="(e, i) in view.list" :key="i" :class="['effect', { big: e.big }]">
           <span v-if="!e.big" class="mono n">×{{ e.count }}</span>
