@@ -10,7 +10,7 @@ One window with tabs (Overview, Session, Inventory, Prices and Strategies) for t
 - [Session](dashboard-ui/session.md): every map of the current, a saved or all sessions, and cleanup of saved sessions.
 - [Inventory](dashboard-ui/inventory.md): search your bag and see what it is worth.
 - [Prices](dashboard-ui/prices.md): every known price, grouped by item type.
-- [Strategies](dashboard-ui/strategies.md): the community strategy ladder with filters, costs, loot and talent trees.
+- [Strategies](dashboard-ui/strategies.md): the community strategy ladder with filters, costs, loot and talent trees, plus your favorite strategies with notes.
 
 The images in these pages are rendered from the dashboard design with sample data, so numbers and names differ from a real session.
 

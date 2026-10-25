@@ -8,6 +8,16 @@
       <div class="title-row">
         <h2>{{ title }}</h2>
         <span class="muted">{{ place }}</span>
+        <button
+          :class="['dash-btn', 'sd-fav', { on: !!fav }]"
+          :aria-pressed="!!fav"
+          :disabled="!fav && favoritesFull"
+          :title="!fav && favoritesFull ? 'Favorites are full' : ''"
+          @click="toggleFavorite(row, stage, seasonId)"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5l1.9 4.1 4.4.5-3.3 3 .9 4.4L8 11.3l-3.9 2.2.9-4.4-3.3-3 4.4-.5z" /></svg>
+          {{ fav ? 'In favorites' : 'Save to favorites' }}
+        </button>
         <div class="dash-seg sd-views" role="group" aria-label="Detail view">
           <button :class="{ on: view === 'loot' }" @click="view = 'loot'">Loot & cost</button>
           <button :class="{ on: view === 'talents' }" @click="view = 'talents'">Talent trees</button>
@@ -44,9 +54,20 @@
       <div class="tags">
         <span v-for="t in tagChips" :key="t.kind + t.label" :class="['tag', t.kind]">{{ t.label }}</span>
       </div>
+      <label v-if="fav" class="sd-note">
+        <span class="dash-label">Your note</span>
+        <textarea
+          :value="fav.note"
+          :maxlength="NOTE_MAX"
+          rows="2"
+          placeholder="Why you saved it, what to try, how it went…"
+          @input="onNote"
+        ></textarea>
+        <span class="faint">Saved {{ savedText }} · from {{ stageName(fav.stage) }}</span>
+      </label>
     </div>
 
-    <div v-if="!detail" class="dash-empty">{{ failed ? "Couldn't load this strategy. Try again in a minute." : 'Loading strategy…' }}</div>
+    <div v-if="!detail" class="dash-empty">{{ !failed ? 'Loading strategy…' : fav ? "The server has no details for this strategy any more (it may be from an older period or season). Your note and the numbers saved with it are kept." : "Couldn't load this strategy. Try again in a minute." }}</div>
     <div v-else-if="view === 'talents'" class="sd-trees dash-scroll">
       <TalentTrees :talents="detail.talents" />
     </div>
@@ -112,16 +133,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { getIcon } from '../../utils/assets';
-import { fmtDur, fmtFE, fmtPrice } from './format';
+import { fmtDate, fmtDur, fmtFE, fmtPrice } from './format';
 import TalentTrees from './TalentTrees.vue';
 import {
   areaName, fetchDetail, itemInfo, itemKind, stageName, timeName, treeList, treeName,
   type DetailData, type ItemInfo, type ItemQty, type StrategyRow,
 } from './strategies/api';
+import { detailView } from './strategies/state';
+import { NOTE_MAX, favoriteOf, favoritesFull, setNote, toggleFavorite } from './strategies/favorites';
 
-const props = defineProps<{ row: StrategyRow; stage: string }>();
+const props = defineProps<{ row: StrategyRow; stage: string; seasonId: string }>();
 defineEmits(['back']);
 
 const LOOT_ROWS = 14;
@@ -136,7 +159,26 @@ const failed = ref(false);
 const info = ref(new Map<string, ItemInfo>());
 const allLoot = ref(false);
 const rareOnly = ref(false);
-const view = ref<'loot' | 'talents'>('loot');
+// Remembered with the rest of the Strategies tab, so a reopened detail shows the same view.
+const view = detailView;
+
+const fav = computed(() => favoriteOf(props.row.key));
+const savedText = computed(() => (fav.value?.savedAt ? fmtDate(fav.value.savedAt) : ''));
+
+let noteTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingNote: string | null = null;
+function flushNote() {
+  if (noteTimer) clearTimeout(noteTimer);
+  noteTimer = null;
+  if (pendingNote !== null) setNote(props.row.key, pendingNote);
+  pendingNote = null;
+}
+function onNote(e: Event) {
+  pendingNote = (e.target as HTMLTextAreaElement).value;
+  if (noteTimer) clearTimeout(noteTimer);
+  noteTimer = setTimeout(flushNote, 400);
+}
+onUnmounted(flushNote);
 
 onMounted(async () => {
   const d = await fetchDetail(props.stage, props.row.key);
@@ -247,6 +289,15 @@ const tagChips = computed(() => {
 .muted { font-size: 12px; color: var(--muted); }
 .faint { color: var(--faint); }
 .sd-views { margin-left: auto; }
+.sd-fav { height: 28px; padding: 0 10px; font-size: 11.5px; align-self: center; }
+.sd-fav svg { fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; }
+.sd-fav.on { color: var(--gold); border-color: var(--gold); }
+.sd-fav.on svg { fill: currentColor; }
+.sd-fav:disabled { opacity: 0.5; cursor: default; }
+.sd-note { display: flex; flex-direction: column; gap: 4px; font-size: 10.5px; }
+.sd-note textarea { box-sizing: border-box; width: 100%; max-width: 720px; resize: vertical; min-height: 40px; padding: 6px 8px; border-radius: 8px; font: inherit; font-size: 12px; line-height: 1.4; color: var(--strong); background: var(--input); border: 1px solid var(--chip-border); outline: none; }
+.sd-note textarea:focus { border-color: var(--accent-border); }
+.sd-note .faint { color: var(--faint); }
 .strip { display: flex; align-items: flex-start; gap: 28px; }
 .strip .val { font-size: 16px; font-weight: 700; color: var(--strong); }
 .strip .val.pos { color: var(--pos); }
