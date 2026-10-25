@@ -15,7 +15,10 @@ One window with four tabs (Overview, Session, Inventory and Prices) for the curr
 - **Settings** (sliders button):
   - **Theme:** dark or light.
   - **Text size:** 80–130%. It scales the whole window, so text and spacing grow together.
-- **New session:** asks for confirmation, saves the current session and starts a new one. The saved session stays available in the Session tab.
+- **New session:** shows the current session's maps, profit and time, with an optional name field (up to 60 characters), then:
+  - **Save and start new** (or Enter in the name field) saves the session, under its name if you gave one, and starts a new one. Saved sessions stay available in the Session tab.
+  - **Discard and start new** deletes the session and its maps and starts a new one. It asks once more (`Delete N maps?`) before deleting.
+  - **Cancel** keeps the current session.
 
 ## Overview
 
@@ -25,7 +28,7 @@ One window with four tabs (Overview, Session, Inventory and Prices) for the curr
 
 ## Session
 
-Choose what to look at in the dropdown: **Current session**, **All time**, or a saved session (`date time · maps · profit`). Sessions are saved when you start a new one. The right side shows the number of maps, profit, profit per hour and average map time for the selection.
+Choose what to look at in the dropdown: **Current session**, **All time**, or a saved session (`name · date time · maps · profit`, without the name when none was given). Sessions are saved when you start a new one. The right side shows the number of maps, profit, profit per hour and average map time for the selection.
 
 **Maps** lists the maps, newest first, with a green or red edge for profit or loss and `LIVE` on the running map. Selecting one shows its time, profit, per hour, loot value and cost, the net profit over time, its loot with each item's share of the map's value, and its expenses.
 

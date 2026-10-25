@@ -2,6 +2,7 @@ import {
   MAX_ARCHIVED_SESSIONS,
   MAX_MAP_HISTORY,
   MAX_RECORD_DROPS,
+  MAX_SESSION_NAME,
   MAX_TIMELINE_POINTS,
   type MapRecord,
   type RecordDrop,
@@ -103,6 +104,7 @@ export function sanitizeSessionRecord(v: unknown): SessionRecord | null {
   if (!isObj(v)) return null;
   const id = safeId(v.id);
   if (!id) return null;
+  const name = text(v.name, MAX_SESSION_NAME).trim();
   return {
     id,
     startedAt: num(v.startedAt, 0, 1e14),
@@ -111,6 +113,7 @@ export function sanitizeSessionRecord(v: unknown): SessionRecord | null {
     profit: num(v.profit),
     maps: num(v.maps, 0, 1e7),
     lootCount: num(v.lootCount, 0, 1e9),
+    ...(name ? { name } : {}),
   };
 }
 

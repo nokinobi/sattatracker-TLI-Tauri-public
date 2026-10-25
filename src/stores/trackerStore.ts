@@ -4,6 +4,7 @@ import {
   MAX_ARCHIVED_SESSIONS,
   MAX_MAP_HISTORY,
   MAX_RECORD_DROPS,
+  MAX_SESSION_NAME,
   MAX_TIMELINE_POINTS,
   type MapRecord,
   type SessionRecord,
@@ -249,9 +250,10 @@ export const useTrackerStore = defineStore('tracker', {
       void this.saveStateToDisk();
     },
 
-    archiveSession() {
+    archiveSession(name = '') {
       const hasData = this.sessionMapCount > 0 || this.sessionDrops.length > 0 || this.sessionTimeSec > 5;
       if (!hasData) return;
+      const trimmed = name.trim().slice(0, MAX_SESSION_NAME);
       this.archivedSessions.push({
         id: this.sessionId,
         startedAt: this.sessionStartedAt,
@@ -260,6 +262,7 @@ export const useTrackerStore = defineStore('tracker', {
         profit: this.totalProfit,
         maps: this.sessionMapCount,
         lootCount: this.sessionLootCount,
+        ...(trimmed ? { name: trimmed } : {}),
       });
       if (this.archivedSessions.length > MAX_ARCHIVED_SESSIONS) {
         this.archivedSessions.splice(0, this.archivedSessions.length - MAX_ARCHIVED_SESSIONS);
@@ -454,9 +457,13 @@ export const useTrackerStore = defineStore('tracker', {
       }
     },
 
-    resetSession() {
+    resetSession(options: { save?: boolean; name?: string } = {}) {
       this.finalizeMap();
-      this.archiveSession();
+      if (options.save === false) {
+        this.mapHistory = this.mapHistory.filter(m => m.sessionId !== this.sessionId);
+      } else {
+        this.archiveSession(options.name);
+      }
       this.sessionId = newId();
       this.sessionStartedAt = Date.now();
       this.totalProfit = -this.mapCost;
