@@ -69,6 +69,8 @@ export const useTrackerStore = defineStore('tracker', {
 
     compactWindowOpacity: 0.88,
     compactWindowFontScale: 1,
+    compactHighValueThreshold: 100,
+    compactHighValueEffect: 'both' as 'glow' | 'pop' | 'both' | 'off',
 
     fxDuration: 4.0,
 
@@ -489,6 +491,8 @@ export const useTrackerStore = defineStore('tracker', {
         widgetOpacity: this.widgetOpacity,
         compactWindowOpacity: this.compactWindowOpacity,
         compactWindowFontScale: this.compactWindowFontScale,
+        compactHighValueThreshold: this.compactHighValueThreshold,
+        compactHighValueEffect: this.compactHighValueEffect,
         fxDuration: this.fxDuration,
         fxX: this.fxX,
         fxY: this.fxY,
@@ -514,6 +518,8 @@ export const useTrackerStore = defineStore('tracker', {
         if (typeof parsed.widgetOpacity === 'number') this.widgetOpacity = parsed.widgetOpacity;
         if (typeof parsed.compactWindowOpacity === 'number') this.compactWindowOpacity = parsed.compactWindowOpacity;
         if (typeof parsed.compactWindowFontScale === 'number') this.compactWindowFontScale = parsed.compactWindowFontScale;
+        if (typeof parsed.compactHighValueThreshold === 'number') this.compactHighValueThreshold = parsed.compactHighValueThreshold;
+        if (['glow', 'pop', 'both', 'off'].includes(parsed.compactHighValueEffect)) this.compactHighValueEffect = parsed.compactHighValueEffect;
         if (typeof parsed.fxDuration === 'number') this.fxDuration = parsed.fxDuration;
         if (typeof parsed.fxX === 'number') this.fxX = parsed.fxX;
         if (typeof parsed.fxY === 'number') this.fxY = parsed.fxY;

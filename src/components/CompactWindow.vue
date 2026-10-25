@@ -13,8 +13,26 @@
       color: '#f4f4f5',
       fontVariantNumeric: 'tabular-nums',
       '--fs': fs,
+      '--cq': CQ_SCALE[cols],
     }"
   >
+    <span
+      v-if="fx && fx.pop"
+      :key="`float-${fx.n}`"
+      class="absolute pointer-events-none rounded-full font-extrabold whitespace-nowrap"
+      :style="{
+        left: `${fx.left}px`,
+        top: '-12px',
+        zIndex: 2,
+        padding: '1px 7px',
+        fontSize: 'calc(11px * var(--fs))',
+        color: '#1c1405',
+        background: '#fbbf24',
+        boxShadow: '0 0 12px rgba(251,191,36,0.7)',
+        opacity: 0,
+        animation: 'cw-float 2.4s ease-out 1 forwards',
+      }"
+    >+{{ Math.round(fx.value) }} FE</span>
     <div
       ref="boxRef"
       class="relative flex flex-col overflow-hidden select-none"
@@ -26,23 +44,32 @@
         boxShadow: '0 6px 18px rgba(0,0,0,0.45)',
         outline: configuring ? '2px dashed #60a5fa' : 'none',
         outlineOffset: '3px',
+        animation: fx && fx.glow ? `cw-glow-${fx.ab} 2.4s ease-out 1` : 'none',
       }"
     >
-      <div ref="topRef" class="shrink-0 grid" style="grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 0.7fr); container-type: inline-size;">
-        <div class="px-2 py-[5px] min-w-0" style="border-right: 1px solid rgba(255,255,255,0.08);">
+      <div ref="topRef" class="shrink-0 grid" :style="{ gridTemplateColumns: TOP_COLS[cols], containerType: 'inline-size' }">
+        <div v-if="cols >= 2" class="px-2 py-[5px] min-w-0" style="border-right: 1px solid rgba(255,255,255,0.08);">
           <div class="text-[length:calc(10px*var(--fs))] font-bold uppercase tracking-[0.08em]" style="color: #a1a1aa;">Profit / hr</div>
-          <div class="font-bold leading-[1.2] whitespace-nowrap truncate" style="font-size: calc(clamp(12px, 6cqw, 18px) * var(--fs));">
+          <div class="font-bold leading-[1.2] whitespace-nowrap truncate" style="font-size: calc(clamp(12px, calc(6cqw * var(--cq)), 18px) * var(--fs));">
             {{ store.profitPerHour }}<span class="text-[length:calc(10px*var(--fs))] font-semibold" style="color: #a1a1aa;"> FE/h</span>
           </div>
           <div class="text-[length:calc(10px*var(--fs))] leading-[1.2]" style="color: #a1a1aa;">Session {{ store.formattedSessionTimer }}</div>
         </div>
-        <div class="px-2 py-[5px] min-w-0" style="border-right: 1px solid rgba(255,255,255,0.08);">
+        <div ref="profitRef" class="px-2 py-[5px] min-w-0" :style="cols === 3 ? { borderRight: '1px solid rgba(255,255,255,0.08)' } : {}">
           <div class="text-[length:calc(10px*var(--fs))] font-bold uppercase tracking-[0.08em]" style="color: #a1a1aa;">Map profit</div>
-          <div class="font-extrabold leading-[1.2] whitespace-nowrap truncate" :style="{ fontSize: 'calc(clamp(13px, 6.7cqw, 20px) * var(--fs))', color: mapProfit >= 0 ? '#4ade80' : '#f87171' }">
+          <div
+            class="font-extrabold leading-[1.2] whitespace-nowrap truncate"
+            :style="{
+              fontSize: 'calc(clamp(13px, calc(6.7cqw * var(--cq)), 20px) * var(--fs))',
+              color: mapProfit >= 0 ? '#4ade80' : '#f87171',
+              transformOrigin: 'left center',
+              animation: fx && fx.pop ? `cw-pop-${fx.ab} 1.6s ease-out 1` : 'none',
+            }"
+          >
             {{ fmtSigned(mapProfit) }}<span class="text-[length:calc(10px*var(--fs))] font-semibold" style="color: #a1a1aa;"> FE</span>
           </div>
         </div>
-        <div class="px-2 py-[5px] min-w-0">
+        <div v-if="cols === 3" class="px-2 py-[5px] min-w-0">
           <div class="text-[length:calc(10px*var(--fs))] font-bold uppercase tracking-[0.08em]" style="color: #a1a1aa;">Map</div>
           <div class="font-semibold leading-[1.5]" style="font-size: calc(clamp(12px, 5cqw, 15px) * var(--fs)); font-family: Consolas, 'Cascadia Mono', monospace; color: #fbbf24;">{{ store.formattedMapTimer }}</div>
         </div>
@@ -75,7 +102,7 @@
               v-for="item in visibleDrops"
               :key="item.item_id"
               class="flex items-center gap-[6px] px-1 rounded-[3px]"
-              style="height: calc(22px*var(--fs)); background: rgba(255,255,255,0.05);"
+              :style="rowStyle(item.item_id)"
             >
               <div class="w-[calc(18px*var(--fs))] h-[calc(18px*var(--fs))] shrink-0 rounded-[3px] flex items-center justify-center" style="background: rgba(0,0,0,0.35);">
                 <img
@@ -84,8 +111,10 @@
                   class="w-full h-full object-contain"
                 />
               </div>
-              <div class="flex-1 min-w-0 text-[length:calc(11px*var(--fs))] font-semibold truncate">{{ item.item_name }}</div>
-              <div class="text-[length:calc(11px*var(--fs))]" style="color: #a1a1aa;">×{{ item.qty }}</div>
+              <svg v-if="highIds.has(item.item_id)" class="shrink-0" width="10" height="10" viewBox="0 0 12 12" role="img" aria-label="High-value drop"><path d="M6 1l5 5-5 5-5-5z" fill="#fbbf24" /></svg>
+              <div v-if="cols > 1" class="flex-1 min-w-0 text-[length:calc(11px*var(--fs))] font-semibold truncate">{{ item.item_name }}</div>
+              <div v-else class="flex-1" />
+              <div v-if="cols > 1" class="text-[length:calc(11px*var(--fs))]" style="color: #a1a1aa;">×{{ item.qty }}</div>
               <div class="w-[calc(40px*var(--fs))] text-right text-[length:calc(12px*var(--fs))] font-bold" style="color: #4ade80;">{{ fmtSigned(item.total) }}</div>
             </div>
           </div>
@@ -125,9 +154,11 @@
     <div
       v-if="cfg"
       ref="cfgRef"
-      class="absolute left-0 right-0 px-[10px] py-2 rounded-md flex flex-col gap-[6px]"
+      class="absolute px-[10px] py-2 rounded-md flex flex-col gap-[6px]"
       :style="{
         ...(cfgAbove ? { bottom: `calc(100% + ${CFG_GAP}px)` } : { top: `calc(100% + ${CFG_GAP}px)` }),
+        ...(x + cfgW > viewW ? { right: 0 } : { left: 0 }),
+        width: `${cfgW}px`,
         background: 'rgba(16,16,20,0.96)',
         border: '1px solid rgba(96,165,250,0.5)',
       }"
@@ -155,6 +186,37 @@
           style="accent-color: #60a5fa;"
         />
         <span class="w-[36px] text-right text-[12px]" style="color: #e4e4e7;">{{ Math.round(fs * 100) }}%</span>
+      </div>
+      <div class="h-px" style="background: rgba(255,255,255,0.08);" />
+      <div class="flex items-center gap-[6px] text-[12px]" style="color: #e4e4e7;">
+        <label for="compact-window-high-value" class="font-semibold" style="color: #fbbf24;">High-value drop</label>
+        <span class="ml-auto">≥</span>
+        <input
+          id="compact-window-high-value"
+          type="text" inputmode="numeric" maxlength="6"
+          :value="store.compactHighValueThreshold"
+          @change="onThreshold"
+          @focus="($event.target as HTMLInputElement).select()"
+          class="w-[56px] px-[6px] py-[2px] rounded-[5px] text-center font-semibold"
+          style="font-family: Consolas, monospace; color: #f4f4f5; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18);"
+        />
+        <span>FE</span>
+      </div>
+      <div role="group" aria-label="High-value drop effect" class="flex gap-[2px] p-[2px] rounded-[7px]" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12);">
+        <button
+          v-for="e in EFFECTS"
+          :key="e.id"
+          type="button"
+          :aria-pressed="store.compactHighValueEffect === e.id"
+          class="flex-1 px-[6px] py-[3px] rounded-[5px] text-[11px] font-semibold whitespace-nowrap"
+          :style="{
+            border: 0,
+            cursor: 'pointer',
+            background: store.compactHighValueEffect === e.id ? '#2563eb' : 'transparent',
+            color: store.compactHighValueEffect === e.id ? '#ffffff' : '#d4d4d8',
+          }"
+          @click="onEffect(e.id)"
+        >{{ e.label }}</button>
       </div>
       <div class="flex items-center justify-between gap-2">
         <span class="text-[10px]" style="color: #a1a1aa;">Drag handle to move · corner to resize</span>
@@ -224,9 +286,29 @@ import { getIcon } from '../utils/assets';
 import { cursorX, cursorY, updateCursor } from '../utils/cursor';
 
 const WIDGET_ID = 'compactWindow';
-const MIN_W     = 240;
 const RESIZE_SNAP = 12;
 const MAX_W     = 640;
+
+// Narrowing the window drops the top-row blocks one at a time: first the map timer,
+// then profit/hr. Map profit always stays; its width is the window's minimum.
+const FULL_W    = 240;
+const TWO_COL_W = 165;
+const ONE_COL_W = 100;
+const TOP_COLS: Record<number, string> = {
+  3: 'minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 0.7fr)',
+  2: 'minmax(0, 1fr) minmax(0, 1fr)',
+  1: 'minmax(0, 1fr)',
+};
+const CQ_SCALE: Record<number, number> = { 3: 1, 2: 1.3, 1: 2.2 };
+
+type HighValueEffect = 'glow' | 'pop' | 'both' | 'off';
+const EFFECTS: { id: HighValueEffect; label: string }[] = [
+  { id: 'glow', label: 'Window glow' },
+  { id: 'pop',  label: 'Profit pop' },
+  { id: 'both', label: 'Both' },
+  { id: 'off',  label: 'Off' },
+];
+const FX_MS = 2600;
 
 const PANEL_GAP    = 6;
 const CFG_GAP      = 8;
@@ -238,6 +320,9 @@ const store = useTrackerStore();
 const fs          = computed(() => store.compactWindowFontScale);
 const rowStep     = computed(() => 22 * fs.value + 2);
 const lootBar     = computed(() => 6 + 14 * fs.value);
+const fullW       = computed(() => Math.round(FULL_W * fs.value));
+const twoColW     = computed(() => Math.round(TWO_COL_W * fs.value));
+const oneColW     = computed(() => Math.round(ONE_COL_W * fs.value));
 const emptyLine   = computed(() => 17 * fs.value);
 const panelChrome = computed(() => 15 + 16 * fs.value);
 const moreRow     = computed(() => 2 + 16 * fs.value);
@@ -249,6 +334,7 @@ const boxRef   = ref<HTMLElement | null>(null);
 const hintRef  = ref<HTMLElement | null>(null);
 const panelRef = ref<HTMLElement | null>(null);
 const cfgRef   = ref<HTMLElement | null>(null);
+const profitRef = ref<HTMLElement | null>(null);
 
 const x = ref(60);
 const y = ref(120);
@@ -264,10 +350,14 @@ const barH     = ref(20);
 const isVisible   = computed(() => store.widgetPositions.compactWindow?.show !== false);
 const configuring = computed(() => cfg.value || store.isEditMode);
 
+const cols = computed(() => w.value >= fullW.value ? 3 : w.value >= twoColW.value ? 2 : 1);
+
 // The settings panel opens below the window, or above it when the screen has no room
 // below and more room above (e.g. a window parked near the bottom edge).
 const cfgH = ref(110);
 const viewH = ref(window.innerHeight);
+const viewW = ref(window.innerWidth);
+const cfgW  = computed(() => Math.max(w.value, 300));
 const cfgAbove = computed(() => {
   const below = viewH.value - (y.value + h.value) - CFG_GAP;
   const above = y.value - CFG_GAP;
@@ -276,6 +366,7 @@ const cfgAbove = computed(() => {
 watch([cfg, fs], async ([open]) => {
   if (!open) return;
   viewH.value = window.innerHeight;
+  viewW.value = window.innerWidth;
   await nextTick();
   if (cfgRef.value) cfgH.value = cfgRef.value.offsetHeight;
 });
@@ -304,9 +395,11 @@ const visibleCount = computed(() =>
   Math.min(groupedDrops.value.length, Math.max(0, Math.floor((listH.value + 2) / rowStep.value))));
 const visibleDrops = computed(() => groupedDrops.value.slice(0, visibleCount.value));
 const moreCount    = computed(() => groupedDrops.value.length - visibleCount.value);
-const hintText     = computed(() => visibleCount.value === 0
-  ? `${groupedDrops.value.length} items · hover to see all`
-  : `+${moreCount.value} more · hover to see all`);
+const hintText     = computed(() => {
+  if (cols.value === 1) return visibleCount.value === 0 ? `${groupedDrops.value.length}` : `+${moreCount.value}`;
+  const text = visibleCount.value === 0 ? `${groupedDrops.value.length} items` : `+${moreCount.value} more`;
+  return cols.value === 3 ? `${text} · hover to see all` : text;
+});
 
 const hintStyle = computed(() => ({
   color: panel.value ? '#fbbf24' : '#a1a1aa',
@@ -314,6 +407,50 @@ const hintStyle = computed(() => ({
 }));
 
 const lootTotal = computed(() => groupedDrops.value.reduce((s, d) => s + d.total, 0));
+
+// High-value drops: rows stay marked for the rest of the map; the window glow and the
+// map profit pop play once per drop, alternating keyframe names so back-to-back drops restart.
+const highIds = ref(new Set<string>());
+const fx = ref<{ n: number; ab: 'a' | 'b'; glow: boolean; pop: boolean; value: number; id: string; left: number } | null>(null);
+let fxCount = 0;
+let fxTimer: ReturnType<typeof setTimeout> | null = null;
+
+watch(() => store.currentMapDrops, () => {
+  highIds.value = new Set();
+  fx.value = null;
+});
+
+watch(() => store.latestDrop, (drop) => {
+  const threshold = store.compactHighValueThreshold;
+  if (!drop || threshold <= 0) return;
+  const value = drop.price * drop.qty;
+  if (value < threshold) return;
+  highIds.value = new Set(highIds.value).add(drop.item_id);
+  const effect = store.compactHighValueEffect;
+  if (effect === 'off') return;
+  fxCount++;
+  fx.value = {
+    n: fxCount,
+    ab: fxCount % 2 ? 'a' : 'b',
+    glow: effect === 'glow' || effect === 'both',
+    pop: effect === 'pop' || effect === 'both',
+    value,
+    id: drop.item_id,
+    left: (profitRef.value?.offsetLeft ?? 0) + 8,
+  };
+  if (fxTimer) clearTimeout(fxTimer);
+  fxTimer = setTimeout(() => { fx.value = null; }, FX_MS);
+});
+
+function rowStyle(id: string) {
+  const high = highIds.value.has(id);
+  return {
+    height: 'calc(22px*var(--fs))',
+    background: high ? 'rgba(251,191,36,0.12)' : 'rgba(255,255,255,0.05)',
+    boxShadow: high ? 'inset 0 0 0 1px rgba(251,191,36,0.55)' : 'none',
+    animation: fx.value && fx.value.id === id ? `cw-row-${fx.value.ab} 2.4s ease-out 1 forwards` : 'none',
+  };
+}
 
 function fmtSigned(n: number): string {
   return (n >= 0 ? '+' : '−') + Math.abs(n).toFixed(1);
@@ -340,7 +477,7 @@ function layoutPanel(): PanelLayout | null {
   if (!box) return null;
   const sw = window.innerWidth;
   const sh = window.innerHeight;
-  const width = box.width;
+  const width = Math.max(box.width, fullW.value);
 
   const all = groupedDrops.value;
   const maxH = sh - SCREEN_PAD * 2;
@@ -453,7 +590,12 @@ function onMove(e: MouseEvent) {
     x.value = Math.min(Math.max(0, initialA + dx), window.innerWidth - w.value);
     y.value = Math.min(Math.max(0, initialB + dy), window.innerHeight - 24);
   } else if (dragMode.value === 'resize') {
-    w.value = Math.min(MAX_W, Math.max(MIN_W, initialA + dx));
+    let nextW = Math.min(MAX_W, Math.max(oneColW.value, initialA + dx));
+    for (const snap of [fullW.value, twoColW.value]) {
+      if (Math.abs(nextW - snap) <= RESIZE_SNAP) { nextW = snap; break; }
+    }
+    if (nextW - oneColW.value <= RESIZE_SNAP) nextW = oneColW.value;
+    w.value = nextW;
     const minH = topH.value + 2;
     const headerH = minH + Math.max(barH.value, lootBar.value);
     let next = Math.max(minH, initialB + dy);
@@ -478,6 +620,19 @@ function onUp() {
 
 function onFontScale(e: Event) {
   store.compactWindowFontScale = Number((e.target as HTMLInputElement).value) / 100;
+  store.saveConfigToStorage();
+}
+
+function onThreshold(e: Event) {
+  const el = e.target as HTMLInputElement;
+  const value = Math.max(0, Math.round(Number(el.value.replace(/[^0-9.]/g, '')) || 0));
+  store.compactHighValueThreshold = value;
+  el.value = String(value);
+  store.saveConfigToStorage();
+}
+
+function onEffect(effect: HighValueEffect) {
+  store.compactHighValueEffect = effect;
   store.saveConfigToStorage();
 }
 
@@ -514,6 +669,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (hoverInterval) clearInterval(hoverInterval);
+  if (fxTimer) clearTimeout(fxTimer);
   window.removeEventListener('mousemove', onWindowMouseMove);
   topObserver?.disconnect();
   barObserver?.disconnect();
@@ -522,3 +678,46 @@ onUnmounted(() => {
   window.removeEventListener('mouseup', onUp);
 });
 </script>
+
+<style>
+@keyframes cw-glow-a {
+  0%   { box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 0 0 rgba(251,191,36,0); border-color: rgba(255,255,255,.12); }
+  12%  { box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 0 3px rgba(251,191,36,.95), 0 0 34px 10px rgba(251,191,36,.55); border-color: #fbbf24; }
+  40%  { box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 0 2px rgba(251,191,36,.6), 0 0 18px 4px rgba(251,191,36,.3); border-color: #fbbf24; }
+  55%  { box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 0 3px rgba(251,191,36,.9), 0 0 30px 8px rgba(251,191,36,.5); border-color: #fbbf24; }
+  100% { box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 0 0 rgba(251,191,36,0); border-color: rgba(255,255,255,.12); }
+}
+@keyframes cw-glow-b {
+  0%   { box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 0 0 rgba(251,191,36,0); border-color: rgba(255,255,255,.12); }
+  12%  { box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 0 3px rgba(251,191,36,.95), 0 0 34px 10px rgba(251,191,36,.55); border-color: #fbbf24; }
+  40%  { box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 0 2px rgba(251,191,36,.6), 0 0 18px 4px rgba(251,191,36,.3); border-color: #fbbf24; }
+  55%  { box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 0 3px rgba(251,191,36,.9), 0 0 30px 8px rgba(251,191,36,.5); border-color: #fbbf24; }
+  100% { box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 0 0 rgba(251,191,36,0); border-color: rgba(255,255,255,.12); }
+}
+@keyframes cw-pop-a {
+  0%   { transform: scale(1); color: #4ade80; text-shadow: none; }
+  18%  { transform: scale(1.25); color: #fde047; text-shadow: 0 0 14px rgba(250,204,21,.85); }
+  45%  { transform: scale(1.08); color: #fde047; text-shadow: 0 0 8px rgba(250,204,21,.6); }
+  100% { transform: scale(1); color: #4ade80; text-shadow: none; }
+}
+@keyframes cw-pop-b {
+  0%   { transform: scale(1); color: #4ade80; text-shadow: none; }
+  18%  { transform: scale(1.25); color: #fde047; text-shadow: 0 0 14px rgba(250,204,21,.85); }
+  45%  { transform: scale(1.08); color: #fde047; text-shadow: 0 0 8px rgba(250,204,21,.6); }
+  100% { transform: scale(1); color: #4ade80; text-shadow: none; }
+}
+@keyframes cw-float {
+  0%   { opacity: 0; transform: translateY(8px); }
+  12%  { opacity: 1; transform: translateY(0); }
+  75%  { opacity: 1; transform: translateY(-14px); }
+  100% { opacity: 0; transform: translateY(-22px); }
+}
+@keyframes cw-row-a {
+  0%   { background: rgba(251,191,36,.55); }
+  100% { background: rgba(251,191,36,.12); }
+}
+@keyframes cw-row-b {
+  0%   { background: rgba(251,191,36,.55); }
+  100% { background: rgba(251,191,36,.12); }
+}
+</style>
