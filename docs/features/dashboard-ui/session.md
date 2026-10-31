@@ -58,7 +58,7 @@ The pencil on a row sets your own price per item for **that item in every finish
 - The session's totals and its maps' **Profit** and **Loot** follow the edit. Other sessions and the item's price everywhere else don't change.
 - It replaces edits of that item made on single maps. **Revert** goes back to the recorded prices, not to those edits. A row with a single-map edit shows **Revert** too.
 - **All time** spans several sessions, so prices can't be edited there. Pick one session to change a price.
-- The running map doesn't change, and a map ending afterwards keeps its recorded price. A row with only running-map drops has no pencil.
+- The running map doesn't change, and a map ending afterwards keeps its recorded price. A row with only running-map drops has no pencil. A row that also holds such drops says how many stayed `at the recorded price`, and its value includes them at that price.
 - Each map stores its 80 most valuable drops, so very cheap drops beyond that keep their recorded value.
 - With **Apply market tax** on, recorded drop prices are after tax, so enter yours after tax too; the editor reminds you.
 

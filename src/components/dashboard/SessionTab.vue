@@ -201,7 +201,7 @@
             <span class="dash-icon"><img :src="getIcon(d.item_id)" alt="" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" /></span>
             <span class="name">
               <span>{{ d.item_name }}</span>
-              <small>{{ d.type ? `${d.type} · ` : '' }}x{{ d.qty }} @ {{ fmtPrice(d.value / (d.qty || 1)) }}{{ d.maps ? ` · dropped in ${d.maps} ${d.maps === 1 ? 'map' : 'maps'}` : '' }}<template v-if="d.was !== undefined"> · <b>edited, was {{ fmtPrice(d.was) }}</b></template></small>
+              <small>{{ d.type ? `${d.type} · ` : '' }}x{{ d.qty }} @ {{ fmtPrice(d.shownUnit) }}{{ d.maps ? ` · dropped in ${d.maps} ${d.maps === 1 ? 'map' : 'maps'}` : '' }}<template v-if="d.was !== undefined"> · <b>edited, was {{ fmtPrice(d.was) }}</b><template v-if="d.unchanged > 0"> · {{ d.unchanged }} at the recorded price</template></template></small>
             </span>
             <span class="bar"><span><i :style="{ width: d.bar + '%' }"></i></span><b class="mono">{{ d.share.toFixed(0) }}%</b></span>
             <span :class="['mono', 'r', d.was !== undefined ? 'accent' : 'gold']">{{ fmtValue(d.value) }} FE</span>
@@ -612,6 +612,10 @@ const scopeLoot = computed(() => {
         // What the finished maps hold: the editor starts from this, not from drops of the running map.
         unit: s && s.qty > 0 ? s.value / s.qty : 0,
         was: s?.edited ? s.original / (s.qty || 1) : undefined,
+        // An edited row shows the price that was set. Drops of the running map or past the 80 a map
+        // keeps aren't repriced, so an average over all of them would show a price nobody entered.
+        shownUnit: s?.edited && s.qty > 0 ? s.value / s.qty : d.value / (d.qty || 1),
+        unchanged: s?.edited ? Math.max(0, d.qty - s.qty) : 0,
         editable: session !== null && !!s && s.qty > 0,
       };
     });
