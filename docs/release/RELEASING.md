@@ -28,7 +28,7 @@ Versions are `x.y.z`, on the fork's own line, independent of the original projec
 | --- | --- | --- |
 | `main` | Exact copy of the original project's `main` | Never commit to it. Only sync it from `upstream`. Used as the base of every release. |
 | `feature/<name>` | One fork feature | Branch from `main`, then add the [review workflows](#review-workflows-on-feature-branches). Keep it rebased on `main`. Its docs go in `docs/features/<name>.md` on the same branch. |
-| `fork/release-config` | Fork-wide files: this doc, the fork README (`.github/README.md`), `scripts/`, the workflows, and `docs/release/versions/` (all release notes) | Branched from `main`. Merged into every release when it starts. |
+| `fork/release-config` | Fork-wide files: this doc, the fork README (`.github/README.md`), `CLAUDE.md`, `scripts/`, the workflows, and `docs/release/versions/` (all release notes) | Branched from `main`. Merged into every release when it starts. |
 | `release/<x.y.z>` | One release | Created by `-Start`. Changed only through reviewed pull requests until it is promoted, never after. |
 | `stable` | The latest released version; the fork's default branch on GitHub | Never commit to it. `-Promote` force-moves it to each new release. |
 
@@ -81,17 +81,18 @@ gh pr create --repo nokinobi/sattatracker-TLI-Tauri-public --base fork/release-c
 
 ### Review workflows on feature branches
 
-GitHub only runs workflow files that exist in a pull request's branches. A feature branch starts from the original project's `main`, which has no review workflows, so pull requests into it would get no Claude review and no commit-lint. Every feature branch therefore carries exact copies of three workflows from `stable`:
+GitHub only runs workflow files that exist in a pull request's branches. A feature branch starts from the original project's `main`, which has no review workflows, so pull requests into it would get no Claude review and no commit-lint. Every feature branch therefore carries exact copies of three workflows from `stable`, plus the `CLAUDE.md` the review checks against:
 
 - `.github/workflows/claude-code-review.yml`
 - `.github/workflows/commit-lint.yml`
 - `.github/workflows/claude.yml`
+- `CLAUDE.md`
 
 **New feature:** add them right after creating the branch:
 
 ```
 git checkout -b feature/<name> main
-git checkout origin/stable -- .github/workflows/claude-code-review.yml .github/workflows/commit-lint.yml .github/workflows/claude.yml
+git checkout origin/stable -- .github/workflows/claude-code-review.yml .github/workflows/commit-lint.yml .github/workflows/claude.yml CLAUDE.md
 git commit -m "ci(<name>): add the review workflows to the feature branch"
 git push -u origin feature/<name>
 ```
@@ -154,7 +155,7 @@ The commit subjects become the release notes, so a good description pays off twi
    - The script fast-forwards `main` to the original project and creates `release/<x.y.z>` from it. A ready fix starts from the previous release of its line instead, see [Fixing a ready version](#fixing-a-ready-version).
    - It merges `fork/release-config` and pushes the branch.
 2. **Add features.** Each `-AddFeature` opens a pull request `feature/<name> -> release/<x.y.z>`. Claude reviews it:
-   - **no blocking issues:** it is approved and merged automatically;
+   - **no problems:** it is approved and merged automatically;
    - **blocking issues:** it is labelled `waiting-for-author` until fixes pushed to the feature branch pass.
 
    Fixes found while preparing the release are made the same way, as a pull request into the release branch, ideally from the feature branch they belong to.
@@ -190,10 +191,10 @@ A fix to a ready version `x.0.z` must not pick up work in progress for the next 
 
 Every pull request into `stable`, a release branch, `fork/*` or `feature/*` is reviewed by Claude (`.github/workflows/claude-code-review.yml`). It runs on the Claude subscription behind the `CLAUDE_CODE_OAUTH_TOKEN` repository secret, not on API billing.
 
-- **`claude-verdict`** is one Claude run. It checks every changed file against the review rules in the workflow's prompt: correctness, cleanup of listeners and timers, error handling, security and privacy, saved data that must still load, performance, consistency with the surrounding code, UI fit, docs and tests, and release tooling. It posts an **inline comment on the exact line** of each problem, marked **Blocking** (real defects: bugs, build or type errors, security or privacy, data loss, broken release tooling) or **Suggestion** (up to 6, no pure style). Then it returns the verdict, a one-line summary, and a list of what it checked by rule. It fails when anything is blocking.
+- **`claude-verdict`** is one Claude run. It runs the official `code-review` plugin (`code-review@claude-plugins-official`: parallel agents that look for certain bugs and `CLAUDE.md` violations, then double-check each one), then checks every changed file against the review rules in the workflow's prompt: correctness, cleanup of listeners and timers, error handling, security and privacy, saved data that must still load, performance, consistency with the surrounding code, UI fit, docs and tests, and release tooling. It posts an **inline comment on the exact line** of each problem. **Every comment must be fixed in the same pull request:** there are no optional suggestions and no follow-up pull requests. Then it returns the verdict, a one-line summary, and a list of what it checked. It fails when any problem remains.
 - **`claude-decision`** acts on the verdict:
-  - **No blocking issues:** approves with a short note (why it passed, and a "Checked:" list) and removes `waiting-for-author`. Other pull requests (features into a release, fixes into `fork/*` or `feature/*`) are then **merged**. The release pull request (`release/<x.y.z> -> stable`) is labelled `ready-to-promote` instead.
-  - **Blocking issues:** requests changes with the summary (details are in the inline comments) and labels the pull request `waiting-for-author`.
+  - **No problems:** approves with a short note (why it passed, and a "Checked:" list) and removes `waiting-for-author`. Other pull requests (features into a release, fixes into `fork/*` or `feature/*`) are then **merged**. The release pull request (`release/<x.y.z> -> stable`) is labelled `ready-to-promote` instead.
+  - **Any problem:** requests changes with the summary (details are in the inline comments) and labels the pull request `waiting-for-author`.
 - All of it runs again on every push to the pull request, so pushing fixes leads to an automatic approval (and merge) once they pass.
 - **`commit-lint`** checks the commit messages of the same pull requests.
 
