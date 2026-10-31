@@ -50,7 +50,7 @@
             </span>
             <span class="sub">
               <span>{{ fmtWhen(r.startedAt) }} · {{ fmtDur(r.durationSec) }}</span>
-              <span>{{ r.lootCount }} items{{ r.expenseValue > 0 ? ' · −' + r.expenseValue.toFixed(0) : '' }}</span>
+              <span>{{ r.lootCount }} items{{ r.expenseValue > 0 ? ' · −' + r.expenseValue.toFixed(0) : '' }}{{ hasEdits(r) ? ' · edited' : '' }}</span>
             </span>
           </span>
         </button>
@@ -102,25 +102,68 @@
               </svg>
             </div>
 
-            <div class="dash-label">Loot ({{ selectedLoot.length }}) · value share</div>
-            <div v-if="selectedLoot.length === 0" class="ss-none">No loot recorded</div>
-            <div v-for="d in selectedLoot" :key="d.item_id" class="ss-loot-row">
-              <span class="share" :style="{ width: d.share + '%' }"></span>
-              <span class="dash-icon"><img :src="getIcon(d.item_id)" alt="" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" /></span>
-              <span class="name">
-                <span>{{ d.item_name }}</span>
-                <small>x{{ d.qty }} @ {{ fmtPrice(d.price) }} · {{ d.share.toFixed(0) }}% of loot</small>
-              </span>
-              <span class="mono gold value">{{ fmtValue(d.value) }} FE</span>
+            <div v-if="editCount > 0" class="ss-edits">
+              <b>{{ editCount === 1 ? '1 price edited for this map' : `${editCount} prices edited for this map` }}</b>
+              <span>Profit is recalculated; the chart keeps the prices recorded during the run.</span>
+              <button class="dash-btn small" @click="revertAll">Revert all</button>
             </div>
 
-            <template v-if="selected.expenses.length > 0">
-              <div class="dash-label">Expenses</div>
-              <div v-for="e in selected.expenses" :key="e.id" class="ss-expense">
-                <span class="name">{{ e.name || e.id }}</span>
-                <span class="mono qty">x{{ e.qty }}</span>
-                <span class="mono neg">−{{ e.total.toFixed(1) }} FE</span>
-              </div>
+            <button class="ss-sec" :aria-expanded="isOpen('expenses')" @click="toggleSection('expenses')">
+              <svg :class="['chev', { shut: !isOpen('expenses') }]" width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="dash-label">Expenses ({{ selectedExpenses.length }}) · consumed in this map</span>
+              <span class="mono total neg">−{{ selected.expenseValue.toFixed(1) }} FE</span>
+            </button>
+            <template v-if="isOpen('expenses')">
+              <div v-if="selectedExpenses.length === 0" class="ss-none">Nothing consumed</div>
+              <MapItemRow
+                v-for="e in selectedExpenses"
+                :key="e.id"
+                :item-id="e.id"
+                :name="e.name || e.id"
+                :detail="`x${e.qty} @ ${fmtPrice(e.unit)}`"
+                :value="'−' + e.total.toFixed(1)"
+                tone="neg"
+                :unit="e.unit"
+                :edited="e.was !== undefined"
+                :was="e.was"
+                :editable="!selected.live && e.qty > 0"
+                :editing="editing === 'e:' + e.id"
+                :error="editError"
+                @edit="editing = 'e:' + e.id"
+                @cancel="editing = ''"
+                @apply="setPrice('expense', e.id, $event)"
+                @revert="setPrice('expense', e.id, null)"
+              />
+            </template>
+
+            <button class="ss-sec" :aria-expanded="isOpen('loot')" @click="toggleSection('loot')">
+              <svg :class="['chev', { shut: !isOpen('loot') }]" width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="dash-label">Loot ({{ selectedLoot.length }}) · value share</span>
+              <span class="mono total gold">{{ fmtFE(selected.lootValue) }} FE</span>
+            </button>
+            <template v-if="isOpen('loot')">
+              <div v-if="selectedLoot.length === 0" class="ss-none">No loot recorded</div>
+              <MapItemRow
+                v-for="d in selectedLoot"
+                :key="d.item_id"
+                :item-id="d.item_id"
+                :name="d.item_name"
+                :detail="`x${d.qty} @ ${fmtPrice(d.price)} · ${d.share.toFixed(0)}% of loot`"
+                :value="fmtValue(d.value)"
+                tone="gold"
+                :unit="d.price"
+                :share="d.share"
+                :edited="d.originalPrice !== undefined"
+                :was="d.originalPrice"
+                :editable="!selected.live"
+                :editing="editing === 'd:' + d.item_id"
+                :error="editError"
+                :after-tax="store.applyTax"
+                @edit="editing = 'd:' + d.item_id"
+                @cancel="editing = ''"
+                @apply="setPrice('drop', d.item_id, $event)"
+                @revert="setPrice('drop', d.item_id, null)"
+              />
             </template>
           </div>
         </template>
@@ -129,7 +172,10 @@
 
     <div v-else class="ss-lootview">
       <div class="ss-loot-head">
-        <span></span><span>Item · everything dropped</span><span>Share of loot</span><span class="r">Value</span>
+        <span></span>
+        <SortHead label="Item · everything dropped" :active="lootSort.key.value === 'name'" :dir="lootSort.dir.value" @sort="lootSort.toggle('name')" />
+        <SortHead label="Share of loot" :active="lootSort.key.value === 'share'" :dir="lootSort.dir.value" @sort="lootSort.toggle('share')" />
+        <SortHead class="r" label="Value" :active="lootSort.key.value === 'value'" :dir="lootSort.dir.value" @sort="lootSort.toggle('value')" />
       </div>
       <div v-if="scopeLoot.length === 0" class="dash-empty">Nothing dropped in this selection</div>
       <div v-else class="ss-loot-list dash-scroll">
@@ -192,6 +238,9 @@ import { useTrackerStore } from '../../stores/trackerStore';
 import { getIcon } from '../../utils/assets';
 import type { MapRecord, RecordDrop } from '../../types/history';
 import { fmtDur, fmtFE, fmtFull, fmtPrice, fmtTime, fmtValue, fmtWhen } from './format';
+import MapItemRow from './MapItemRow.vue';
+import SortHead from './SortHead.vue';
+import { sortedBy, useSort } from './useSort';
 
 const props = defineProps<{ focusMapId: string }>();
 
@@ -402,6 +451,73 @@ const detailCells = computed(() => {
   ];
 });
 
+const selectedExpenses = computed(() => {
+  const r = selected.value;
+  if (!r) return [];
+  return r.expenses.map(e => ({
+    ...e,
+    unit: e.qty > 0 ? e.total / e.qty : 0,
+    was: e.originalTotal !== undefined && e.qty > 0 ? e.originalTotal / e.qty : undefined,
+  }));
+});
+
+const hasEdits = (r: Row) => r.drops.some(d => d.originalPrice !== undefined) || r.expenses.some(e => e.originalTotal !== undefined);
+
+const editCount = computed(() => {
+  const r = selected.value;
+  if (!r) return 0;
+  return r.drops.filter(d => d.originalPrice !== undefined).length + r.expenses.filter(e => e.originalTotal !== undefined).length;
+});
+
+// The row whose price editor is open: 'd:<item id>' for loot, 'e:<item id>' for an expense.
+const editing = ref('');
+watch(selectedId, () => { editing.value = ''; });
+
+const editError = ref('');
+watch(editing, () => { editError.value = ''; });
+
+function setPrice(kind: 'drop' | 'expense', itemId: string, price: number | null) {
+  if (selected.value && !store.setMapItemPrice(selected.value.id, kind, itemId, price)) {
+    editError.value = 'That price is too high for this quantity.';
+    return;
+  }
+  editing.value = '';
+}
+
+function revertAll() {
+  const r = selected.value;
+  if (!r) return;
+  r.drops.filter(d => d.originalPrice !== undefined).forEach(d => store.setMapItemPrice(r.id, 'drop', d.item_id, null));
+  r.expenses.filter(e => e.originalTotal !== undefined).forEach(e => store.setMapItemPrice(r.id, 'expense', e.id, null));
+  editing.value = '';
+}
+
+// Collapsed sections of the map detail, remembered between runs.
+const CLOSED_KEY = 'tli_session_closed_sections';
+type Section = 'expenses' | 'loot';
+function loadClosed(): Section[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLOSED_KEY) ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is Section => x === 'expenses' || x === 'loot') : [];
+  } catch {
+    return [];
+  }
+}
+const closed = ref(new Set<Section>(loadClosed()));
+const isOpen = (section: Section) => !closed.value.has(section);
+function toggleSection(section: Section) {
+  const next = new Set(closed.value);
+  if (!next.delete(section)) next.add(section);
+  closed.value = next;
+  try {
+    localStorage.setItem(CLOSED_KEY, JSON.stringify([...next]));
+  } catch {
+    // Remembering collapsed sections is a convenience; ignore storage errors.
+  }
+}
+
+const lootSort = useSort('session-loot', { name: 'asc', share: 'desc', value: 'desc' }, 'value');
+
 const selectedLoot = computed(() => {
   const r = selected.value;
   if (!r) return [];
@@ -434,7 +550,9 @@ const scopeLoot = computed(() => {
   const list = [...byId.values()].sort((a, b) => b.value - a.value);
   const total = list.reduce((a, d) => a + d.value, 0) || 1;
   const top = list[0]?.value || 1;
-  return list.map(d => ({ ...d, share: (d.value / total) * 100, bar: (d.value / top) * 100 }));
+  const by = lootSort.key.value;
+  return sortedBy(list, d => (by === 'name' ? d.item_name : d.value), lootSort.dir.value)
+    .map(d => ({ ...d, share: (d.value / total) * 100, bar: (d.value / top) * 100 }));
 });
 
 interface ChartPoint { x: number; y: number; t: number; v: number }
@@ -533,14 +651,15 @@ function onChartMove(e: MouseEvent) {
 .ss-detail-body { flex: 1; min-height: 0; padding: 12px 18px; display: flex; flex-direction: column; gap: 8px; }
 .ss-chart { padding: 6px; }
 .ss-none { font-size: 12px; color: var(--label); }
-.ss-loot-row { position: relative; display: flex; align-items: center; gap: 12px; padding: 6px 12px; border-radius: 10px; overflow: hidden; background: var(--panel); border: 1px solid var(--panel-border); flex-shrink: 0; }
-.ss-loot-row .share { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gold); opacity: 0.08; }
-.ss-loot-row .name, .ss-loot-line .name { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: var(--strong); }
-.ss-loot-row .name small, .ss-loot-line .name small { font-size: 10px; font-weight: 400; color: var(--label); }
-.ss-loot-row .value { position: relative; font-size: 13px; font-weight: 700; }
-.ss-expense { display: flex; align-items: center; gap: 12px; padding: 6px 12px; border-radius: 10px; font-size: 12px; background: var(--panel); border: 1px solid var(--panel-border); flex-shrink: 0; }
-.ss-expense .name { flex: 1; color: var(--text); }
-.ss-expense .qty { font-size: 10px; color: var(--label); }
+.ss-edits { flex-shrink: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 12px; border-radius: 8px; font-size: 11px; color: var(--muted); background: var(--accent-bg); border: 1px solid var(--accent-border); }
+.ss-edits b { font-weight: 600; color: var(--accent-text); }
+.ss-edits .dash-btn { margin-left: auto; align-self: center; }
+.ss-sec { flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 2px 0; background: none; border: none; cursor: pointer; color: var(--label); text-align: left; }
+.ss-sec .chev { flex-shrink: 0; transition: transform 0.15s; }
+.ss-sec .chev.shut { transform: rotate(-90deg); }
+.ss-sec .total { margin-left: auto; font-size: 11px; font-weight: 700; }
+.ss-loot-line .name { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: var(--strong); }
+.ss-loot-line .name small { font-size: 10px; font-weight: 400; color: var(--label); }
 
 .ss-lootview { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .ss-loot-head, .ss-loot-line { display: grid; grid-template-columns: 30px minmax(0, 1fr) 160px 90px; gap: 12px; align-items: center; }

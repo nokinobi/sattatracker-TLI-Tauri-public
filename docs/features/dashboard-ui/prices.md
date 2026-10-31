@@ -6,7 +6,8 @@ Every price the tracker knows, grouped by item type. Part of the [Dashboard](../
 
 - **Main type** (left): Equipment, Skills, Maps & compasses, Currency & materials, Vorax organs and Memories, with item counts.
 - **Sub type** chips: the item types inside the chosen main type, for example Legendary, Destiny and Prism under Equipment, or Noble and Magnificent support skills under Skills.
-- **Search** within the selection, **Price** min and max, **All / Counted / Blocked / Manual**, and **Sort** by price or name.
+- **Search** within the selection, **Price** min and max, and **All / Counted / Blocked / Manual**.
+- **Sort** by clicking a column header: Item, Price or In bag. Click again to reverse; the tab remembers your choice.
 - **In bag** shows how many of the item you have. Items you own have a highlighted border.
 - Bottom left: when the prices were last updated and when the next refresh is due (every 10 minutes while the tracker runs). Before the first download it says the tracker is using saved prices.
 

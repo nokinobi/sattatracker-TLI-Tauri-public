@@ -23,11 +23,26 @@ Selecting a map shows:
 
 - **Time**, **Profit** (green or red), **Loot** value (gold) and **Cost** (red when the map cost something).
 - The map's net profit over time; hover the chart to read it at any moment. The running map is marked `IN PROGRESS`.
-- Its loot, with each item's share of the map's value, and its expenses.
+- **Expenses:** what the map consumed, with quantity, price per item and FE.
+- **Loot:** what dropped, with each item's share of the map's value.
+
+Expenses and Loot collapse from their headers, which also show their totals. The tab remembers which ones you closed.
+
+### Changing a price for one map
+
+The pencil on an expense or loot row of a finished map sets your own price per item, **for that map only**: for example when a drop sold for less than its market price. Press **Apply** or Enter; **Cancel** or Esc closes the editor.
+
+- The row shows the new price in blue with `edited, was 4.82`, and a **Revert** button brings the recorded price back. A strip above the lists shows how many prices are edited, with **Revert all**. The map's row in the list says `edited`.
+- The map's **Profit**, **Loot** and **Cost**, and the session's totals and Loot view, follow the edit. The item's price anywhere else doesn't change. For a price that applies everywhere for a limited time, use [manual prices](prices.md#manual-prices).
+- The chart keeps the prices recorded during the run, because it stores only the running total.
+- The running map can't be edited yet: its values change with every drop. Edit it once it has ended.
+- With **Apply market tax** on, recorded drop prices are after tax, so enter yours after tax too; the editor reminds you. Expenses aren't taxed.
+- Each map stores its 80 most valuable drops, so very cheap items beyond that have no row to edit.
+- Edits are saved with the map and go away when the map or session is deleted.
 
 ## Loot
 
-Everything dropped in the selection combined: quantity, in how many maps it dropped, its share of all loot and its value.
+Everything dropped in the selection combined: quantity, in how many maps it dropped, its share of all loot and its value. Click a column header (Item, Share of loot, Value) to sort; click again to reverse.
 
 ![Session tab, Loot](img/session-loot.png)
 
@@ -49,5 +64,5 @@ With a saved session selected, a strip under the toolbar shows `Saved session ·
 
 ## Code
 
-- `src/components/dashboard/SessionTab.vue`
-- `src/stores/trackerStore.ts`: `deleteSessions` removes sessions and their maps (maps belong to a session by `sessionId`).
+- `src/components/dashboard/SessionTab.vue`, `MapItemRow.vue`: the tab, and a map's loot and expense rows with the price editor.
+- `src/stores/trackerStore.ts`: `deleteSessions` removes sessions and their maps (maps belong to a session by `sessionId`); `setMapItemPrice` sets or reverts a price for one map.

@@ -13,7 +13,7 @@ export type DetailView = 'loot' | 'talents';
 const STATE_KEY = 'tli_strategies_state';
 const CLOSED_KEY = 'tli_strategies_closed_sections';
 const SECTIONS: Section[] = ['timemark', 'mechanic', 'compass', 'astrolabe'];
-const SORT_VALUES = ['avgEfficiency', 'totalCount'];
+const SORT_VALUES = ['avgEfficiency', 'totalCount', 'avgEarnings'];
 
 interface Saved {
   stage: string;

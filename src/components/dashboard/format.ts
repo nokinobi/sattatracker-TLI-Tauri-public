@@ -46,6 +46,15 @@ export function fmtFull(ms: number): string {
   });
 }
 
+// A number typed by hand, with a dot or comma for decimals. Null when it isn't one, or when it
+// could mean two things: "1,500" is 1.5 with a decimal comma but 1500 with a thousands comma.
+export function parseDecimal(text: string): number | null {
+  const t = text.trim();
+  if (!/^\d*[.,]?\d*$/.test(t) || !/\d/.test(t)) return null;
+  if (/^[1-9]\d*,\d{3}$/.test(t)) return null;
+  return Number(t.replace(',', '.'));
+}
+
 // Time left on something, e.g. "42 min left", "1 h 12 min left".
 export function fmtLeft(ms: number): string {
   const min = Math.ceil(ms / 60000);

@@ -47,6 +47,7 @@ export function sanitizeDrops(v: unknown, max = MAX_RECORD_DROPS): RecordDrop[] 
       item_name: text(d.item_name, 120),
       qty: num(d.qty, 0, 1e9),
       price: num(d.price, 0, 1e8),
+      ...(typeof d.originalPrice === 'number' ? { originalPrice: num(d.originalPrice, 0, 1e8) } : {}),
     });
   }
   return out;
@@ -63,6 +64,7 @@ export function sanitizeExpenses(v: unknown, max = 60): RecordExpense[] {
       name: text(e.name, 120),
       qty: num(e.qty, 0, 1e9),
       total: num(e.total, 0, 1e9),
+      ...(typeof e.originalTotal === 'number' ? { originalTotal: num(e.originalTotal, 0, 1e9) } : {}),
     });
   }
   return out;

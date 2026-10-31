@@ -130,11 +130,12 @@
           </div>
           <template v-if="showFavorites">
             <span class="heading">Favorites</span>
-            <span class="sub">{{ favorites.length }} saved · newest first · numbers as they were when saved · filters apply to the ladder only</span>
+            <span class="sub">{{ favorites.length }} saved{{ favSort.key.value === 'saved' ? ' · newest first' : '' }} · numbers as they were when saved · filters apply to the ladder only</span>
+            <button v-if="favSort.key.value !== 'saved'" class="st-link" @click="favSort.toggle('saved')">Newest first</button>
           </template>
           <template v-else>
           <span class="heading">{{ heading }}</span>
-          <span class="sub">{{ board ? `${board.total} strategies · ranked by ${sort === 'totalCount' ? 'maps run' : 'profit per hour'}` : '' }}</span>
+          <span class="sub">{{ board ? `${board.total} strategies · ranked by ${sort === 'totalCount' ? 'maps run' : sort === 'avgEarnings' ? 'FE per map' : 'profit per hour'}` : '' }}</span>
           <span class="status">
             <template v-if="seasonId">Season {{ seasonId }} · </template>
             <span v-if="stale && !error" class="warn">Server unreachable, showing saved data · </span>
@@ -169,7 +170,22 @@
 
       <div :class="['st-progress', { on: loading && !showFavorites }]" role="progressbar" aria-label="Loading strategies" :aria-hidden="!loading || showFavorites"><span></span></div>
       <div class="st-head">
-        <span>#</span><span>Strategy</span><span>Profit / hour</span><span class="r">Maps</span><span class="r">FE / map</span><span class="r">Time</span><span></span>
+        <span>#</span>
+        <template v-if="showFavorites">
+          <SortHead label="Strategy" :active="favSort.key.value === 'name'" :dir="favSort.dir.value" @sort="favSort.toggle('name')" />
+          <SortHead label="Profit / hour" :active="favSort.key.value === 'perHour'" :dir="favSort.dir.value" @sort="favSort.toggle('perHour')" />
+          <SortHead class="r" label="Maps" :active="favSort.key.value === 'maps'" :dir="favSort.dir.value" @sort="favSort.toggle('maps')" />
+          <SortHead class="r" label="FE / map" :active="favSort.key.value === 'perMap'" :dir="favSort.dir.value" @sort="favSort.toggle('perMap')" />
+          <SortHead class="r" label="Time" :active="favSort.key.value === 'time'" :dir="favSort.dir.value" @sort="favSort.toggle('time')" />
+        </template>
+        <template v-else>
+          <span>Strategy</span>
+          <SortHead label="Profit / hour" :active="sort === 'avgEfficiency'" dir="desc" @sort="sort = 'avgEfficiency'" />
+          <SortHead class="r" label="Maps" :active="sort === 'totalCount'" dir="desc" @sort="sort = 'totalCount'" />
+          <SortHead class="r" label="FE / map" :active="sort === 'avgEarnings'" dir="desc" @sort="sort = 'avgEarnings'" />
+          <span class="r">Time</span>
+        </template>
+        <span></span>
       </div>
       <div v-if="showFavorites" class="st-list dash-scroll">
         <div v-if="favorites.length === 0" class="dash-empty">
@@ -270,6 +286,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { getIcon } from '../../utils/assets';
 import { fmtAgo, fmtDate, fmtDur, fmtValue } from './format';
 import StrategyDetail from './StrategyDetail.vue';
+import SortHead from './SortHead.vue';
+import { sortedBy, useSort } from './useSort';
 import { PROFOUND, TREES } from './strategies/trees';
 import {
   areaName, strategyApi, itemInfo, itemKind, stageName, timeName, treeList, treeName,
@@ -461,8 +479,19 @@ const rows = computed(() => {
   });
 });
 
+const favSort = useSort('favorites', { saved: 'desc', name: 'asc', perHour: 'desc', maps: 'desc', perMap: 'desc', time: 'desc' }, 'saved');
+
 const favRows = computed(() => {
-  const list = favorites.value;
+  const by = favSort.key.value;
+  const list = sortedBy(favorites.value, f => {
+    const r = f.row;
+    if (by === 'name') return treeList(r.talentLabel) || 'No main talent';
+    if (by === 'perHour') return r.avgEfficiency;
+    if (by === 'maps') return r.count;
+    if (by === 'perMap') return r.avgEarnings;
+    if (by === 'time') return r.avgDuration;
+    return f.savedAt;
+  }, favSort.dir.value);
   const top = Math.max(1, ...list.map(f => f.row.avgEfficiency));
   return list.map(f => {
     const r = f.row;
