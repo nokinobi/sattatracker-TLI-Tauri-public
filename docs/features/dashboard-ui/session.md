@@ -42,9 +42,25 @@ The pencil on an expense or loot row of a finished map sets your own price per i
 
 ## Loot
 
-Everything dropped in the selection combined: quantity, in how many maps it dropped, its share of all loot and its value. Click a column header (Item, Share of loot, Value) to sort; click again to reverse.
+Everything dropped in the selection combined: item type, quantity, average price, in how many maps it dropped, its share of all loot and its value. The toolbar shows what dropped, what was spent, what was earned and the number of item types. Click a column header (Item, Share of loot, Value) to sort; click again to reverse.
 
 ![Session tab, Loot](img/session-loot.png)
+
+### Filtering by tag
+
+Chips above the list filter it by item group, such as **Maps & compasses** or **Currency & materials**, with the number of items in each. Pick a group and a second row filters by item type, such as Compass or Beacon. They use the same groups as the Prices tab.
+
+### Changing a price for a whole session
+
+The pencil on a row sets your own price per item for **that item in every finished map of the selected session**. It works on the current session and on saved sessions. Press **Apply** or Enter; **Cancel** or Esc closes the editor.
+
+- The row shows the new average price in blue with `edited, was 1.00`, and **Revert** brings the recorded prices back. A strip above the list shows how many prices are edited, with **Revert all**.
+- The session's totals and its maps' **Profit** and **Loot** follow the edit. Other sessions and the item's price everywhere else don't change.
+- It replaces edits of that item made on single maps. **Revert** goes back to the recorded prices, not to those edits. A row with a single-map edit shows **Revert** too.
+- **All time** spans several sessions, so prices can't be edited there. Pick one session to change a price.
+- The running map doesn't change, and a map ending afterwards keeps its recorded price. A row with only running-map drops has no pencil.
+- Each map stores its 80 most valuable drops, so very cheap drops beyond that keep their recorded value.
+- With **Apply market tax** on, recorded drop prices are after tax, so enter yours after tax too; the editor reminds you.
 
 ## Deleting a saved session
 
