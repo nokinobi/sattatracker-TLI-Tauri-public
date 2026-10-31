@@ -39,6 +39,10 @@ export interface InventorySnapshotItem {
   price:     number;
 }
 
+// Amounts the Compact Window's high-value slider steps through (a slider because the overlay
+// never takes keyboard focus from the game). 0 turns marking and effects off.
+export const COMPACT_THRESHOLD_STEPS = [0, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
+
 export interface LootItem {
   item_id: string;
   item_name: string;
@@ -66,6 +70,11 @@ export const useTrackerStore = defineStore('tracker', {
     extraFxStyle: 'piggy' as 'casino' | 'piggy' | 'web' | 'chain' | 'orbital' | 'bubbles' | 'swarm' | 'rings' | 'slash' | 'shockwave' | 'confetti' | 'lightning' | 'none',
 
     widgetOpacity: 0.9,
+
+    compactWindowOpacity: 0.88,
+    compactWindowFontScale: 1,
+    compactHighValueThreshold: 100,
+    compactHighValueEffect: 'both' as 'glow' | 'pop' | 'both' | 'off',
 
     fxDuration: 4.0,
 
@@ -136,6 +145,7 @@ export const useTrackerStore = defineStore('tracker', {
 
       mapTimer: { x: 800, y: 50, show: true, w: undefined as number|undefined, h: undefined as number|undefined },
       mapExpense: { x: 50, y: 400, show: true, w: undefined as number|undefined, h: undefined as number|undefined },
+      compactWindow: { x: 60, y: 120, show: false, w: 300 as number|undefined, h: 280 as number|undefined },
       itemsHistory: { x: 200, y: 100, show: false, w: 800, h: 600 }
     }
   }),
@@ -483,6 +493,10 @@ export const useTrackerStore = defineStore('tracker', {
         dropFxStyle: this.dropFxStyle,
         extraFxStyle: this.extraFxStyle,
         widgetOpacity: this.widgetOpacity,
+        compactWindowOpacity: this.compactWindowOpacity,
+        compactWindowFontScale: this.compactWindowFontScale,
+        compactHighValueThreshold: this.compactHighValueThreshold,
+        compactHighValueEffect: this.compactHighValueEffect,
         fxDuration: this.fxDuration,
         fxX: this.fxX,
         fxY: this.fxY,
@@ -506,6 +520,14 @@ export const useTrackerStore = defineStore('tracker', {
         if (parsed.dropFxStyle) this.dropFxStyle = parsed.dropFxStyle;
         if (parsed.extraFxStyle) this.extraFxStyle = parsed.extraFxStyle;
         if (typeof parsed.widgetOpacity === 'number') this.widgetOpacity = parsed.widgetOpacity;
+        if (Number.isFinite(parsed.compactWindowOpacity)) this.compactWindowOpacity = Math.min(1, Math.max(0.3, parsed.compactWindowOpacity));
+        if (Number.isFinite(parsed.compactWindowFontScale)) this.compactWindowFontScale = Math.min(1.5, Math.max(0.8, parsed.compactWindowFontScale));
+        if (Number.isFinite(parsed.compactHighValueThreshold)) {
+          // The nearest slider step, so the label always matches what the drop check uses.
+          this.compactHighValueThreshold = COMPACT_THRESHOLD_STEPS.reduce((best, step) =>
+            (Math.abs(step - parsed.compactHighValueThreshold) < Math.abs(best - parsed.compactHighValueThreshold) ? step : best));
+        }
+        if (['glow', 'pop', 'both', 'off'].includes(parsed.compactHighValueEffect)) this.compactHighValueEffect = parsed.compactHighValueEffect;
         if (typeof parsed.fxDuration === 'number') this.fxDuration = parsed.fxDuration;
         if (typeof parsed.fxX === 'number') this.fxX = parsed.fxX;
         if (typeof parsed.fxY === 'number') this.fxY = parsed.fxY;
@@ -513,6 +535,7 @@ export const useTrackerStore = defineStore('tracker', {
         if (typeof parsed.pauseTimerOnHub === 'boolean') this.pauseTimerOnHub = parsed.pauseTimerOnHub;
         if (parsed.widgetPositions) {
           this.widgetPositions = { ...this.widgetPositions, ...parsed.widgetPositions };
+          delete (this.widgetPositions as any).compactMap;
         }
         if (parsed.blockedItemIds) this.blockedItemIds = parsed.blockedItemIds;
         if (typeof parsed.lowStockEnabled === 'boolean') this.lowStockEnabled = parsed.lowStockEnabled;
