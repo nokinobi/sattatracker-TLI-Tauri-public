@@ -393,12 +393,15 @@ async function load(opts: { boardOnly?: boolean } = {}) {
     const q = filterQuery();
     const extra = mechIn.value.slice(1);
     const withTags = !opts.boardOnly;
+    const tagsNow = withTags ? strategyApi<TagsData>('tags', q) : null;
+    // Without filters the unfiltered list is the same question, so it's asked once.
+    const unfiltered = !q.tags && !q.excludeTags;
     const [b, t, base] = await Promise.all([
       extra.length
         ? loadAll(q, extra, gen)
         : strategyApi<LeaderboardData>('leaderboard', { ...q, sort: sort.value, limit: String(PAGE_SIZE), offset: String((page.value - 1) * PAGE_SIZE) }),
-      withTags ? strategyApi<TagsData>('tags', q) : null,
-      withTags ? strategyApi<TagsData>('tags', { stage: stage.value, minCount: String(minCount.value) }) : null,
+      tagsNow,
+      withTags && !unfiltered ? strategyApi<TagsData>('tags', { stage: stage.value, minCount: String(minCount.value) }) : tagsNow,
     ]);
     if (gen !== generation) return;
     localPages.value = extra.length > 0;
