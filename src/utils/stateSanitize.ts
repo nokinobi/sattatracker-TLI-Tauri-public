@@ -2,6 +2,7 @@ import {
   MAX_ARCHIVED_SESSIONS,
   MAX_MAP_HISTORY,
   MAX_RECORD_DROPS,
+  MAX_SESSION_NAME,
   MAX_TIMELINE_POINTS,
   type MapRecord,
   type RecordDrop,
@@ -46,6 +47,7 @@ export function sanitizeDrops(v: unknown, max = MAX_RECORD_DROPS): RecordDrop[] 
       item_name: text(d.item_name, 120),
       qty: num(d.qty, 0, 1e9),
       price: num(d.price, 0, 1e8),
+      ...(typeof d.originalPrice === 'number' ? { originalPrice: num(d.originalPrice, 0, 1e8) } : {}),
     });
   }
   return out;
@@ -62,6 +64,7 @@ export function sanitizeExpenses(v: unknown, max = 60): RecordExpense[] {
       name: text(e.name, 120),
       qty: num(e.qty, 0, 1e9),
       total: num(e.total, 0, 1e9),
+      ...(typeof e.originalTotal === 'number' ? { originalTotal: num(e.originalTotal, 0, 1e9) } : {}),
     });
   }
   return out;
@@ -103,6 +106,7 @@ export function sanitizeSessionRecord(v: unknown): SessionRecord | null {
   if (!isObj(v)) return null;
   const id = safeId(v.id);
   if (!id) return null;
+  const name = text(v.name, MAX_SESSION_NAME).trim();
   return {
     id,
     startedAt: num(v.startedAt, 0, 1e14),
@@ -111,6 +115,7 @@ export function sanitizeSessionRecord(v: unknown): SessionRecord | null {
     profit: num(v.profit),
     maps: num(v.maps, 0, 1e7),
     lootCount: num(v.lootCount, 0, 1e9),
+    ...(name ? { name } : {}),
   };
 }
 

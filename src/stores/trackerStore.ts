@@ -4,6 +4,7 @@ import {
   MAX_ARCHIVED_SESSIONS,
   MAX_MAP_HISTORY,
   MAX_RECORD_DROPS,
+  MAX_SESSION_NAME,
   MAX_TIMELINE_POINTS,
   type MapRecord,
   type SessionRecord,
@@ -35,6 +36,8 @@ interface CurrentMapMeta {
 export interface InventorySnapshotItem {
   item_id:   string;
   item_name: string;
+  item_type?: string;
+  page_id?:  number;
   qty:       number;
   price:     number;
 }
@@ -58,6 +61,10 @@ export interface ExpenseItem {
   total: number;
   timestamp: number;
 }
+
+const MAX_MAP_ITEM_PRICE = 1e7;
+// The loader (stateSanitize) clamps item totals and map values to this.
+const MAX_SAVED_VALUE = 1e9;
 
 export const useTrackerStore = defineStore('tracker', {
   state: () => ({
@@ -84,6 +91,9 @@ export const useTrackerStore = defineStore('tracker', {
     fxScale: 1.0,
 
     pauseTimerOnHub: true,
+
+    dashboardTheme: 'dark' as 'dark' | 'light',
+    dashboardFontScale: 1,
 
     isEditMode: false,
 
@@ -254,9 +264,10 @@ export const useTrackerStore = defineStore('tracker', {
       void this.saveStateToDisk();
     },
 
-    archiveSession() {
+    archiveSession(name = '') {
       const hasData = this.sessionMapCount > 0 || this.sessionDrops.length > 0 || this.sessionTimeSec > 5;
       if (!hasData) return;
+      const trimmed = name.trim().slice(0, MAX_SESSION_NAME);
       this.archivedSessions.push({
         id: this.sessionId,
         startedAt: this.sessionStartedAt,
@@ -265,6 +276,7 @@ export const useTrackerStore = defineStore('tracker', {
         profit: this.totalProfit,
         maps: this.sessionMapCount,
         lootCount: this.sessionLootCount,
+        ...(trimmed ? { name: trimmed } : {}),
       });
       if (this.archivedSessions.length > MAX_ARCHIVED_SESSIONS) {
         this.archivedSessions.splice(0, this.archivedSessions.length - MAX_ARCHIVED_SESSIONS);
@@ -459,9 +471,13 @@ export const useTrackerStore = defineStore('tracker', {
       }
     },
 
-    resetSession() {
+    resetSession(options: { save?: boolean; name?: string } = {}) {
       this.finalizeMap();
-      this.archiveSession();
+      if (options.save === false) {
+        this.mapHistory = this.mapHistory.filter(m => m.sessionId !== this.sessionId);
+      } else {
+        this.archiveSession(options.name);
+      }
       this.sessionId = newId();
       this.sessionStartedAt = Date.now();
       this.totalProfit = -this.mapCost;
@@ -471,6 +487,100 @@ export const useTrackerStore = defineStore('tracker', {
       this.sessionMapCount = 0;
       this.inventoryValue = 0;
       this.resetMap();
+      this.stateDirty = true;
+      void this.saveStateToDisk();
+    },
+
+    // Sets what one item was worth in one finished map (price per item), or with null goes back
+    // to the recorded value. Only that map and its session's totals change, not the item's price.
+    setMapItemPrice(mapId: string, kind: 'drop' | 'expense', itemId: string, price: number | null): boolean {
+      if (price !== null && !(Number.isFinite(price) && price > 0 && price <= MAX_MAP_ITEM_PRICE)) return false;
+      const map = this.mapHistory.find(m => m.id === mapId);
+      if (!map) return false;
+      const inCurrent = map.sessionId === this.sessionId;
+      const archived = inCurrent ? undefined : this.archivedSessions.find(s => s.id === map.sessionId);
+      const sessionProfit = inCurrent ? this.totalProfit : archived?.profit ?? 0;
+      const fits = (...values: number[]) => values.every(v => Math.abs(v) <= MAX_SAVED_VALUE);
+      // How much the map's profit changes. Not rounded, so a revert lands exactly where it started.
+      let delta: number;
+      if (kind === 'drop') {
+        const d = map.drops.find(x => x.item_id === itemId);
+        if (!d) return false;
+        const next = price ?? d.originalPrice ?? d.price;
+        delta = (next - d.price) * d.qty;
+        if (!fits(next * d.qty, map.lootValue + delta, map.profit + delta, sessionProfit + delta)) return false;
+        if (price === null) delete d.originalPrice;
+        else if (d.originalPrice === undefined) d.originalPrice = d.price;
+        d.price = next;
+        map.lootValue = Math.max(0, map.lootValue + delta);
+        if (inCurrent) {
+          const s = this.sessionDrops.find(x => x.item_id === itemId);
+          if (s && s.qty > 0) s.price = Math.max(0, (s.price * s.qty + delta) / s.qty);
+        }
+      } else {
+        const e = map.expenses.find(x => x.id === itemId);
+        if (!e) return false;
+        const next = price === null ? e.originalTotal ?? e.total : price * e.qty;
+        delta = e.total - next;
+        if (!fits(next, map.expenseValue - delta, map.profit + delta, sessionProfit + delta)) return false;
+        if (price === null) delete e.originalTotal;
+        else if (e.originalTotal === undefined) e.originalTotal = e.total;
+        e.total = next;
+        map.expenseValue = Math.max(0, map.expenseValue - delta);
+      }
+      map.profit += delta;
+      if (inCurrent) this.totalProfit += delta;
+      else if (archived) archived.profit += delta;
+      this.stateDirty = true;
+      void this.saveStateToDisk();
+      return true;
+    },
+
+    // Sets what one dropped item was worth in every finished map of one session, or with null goes
+    // back to the recorded values. Replaces edits of that item in those maps. Other sessions and the
+    // item's price stay as they are. All maps change or none do.
+    setSessionItemPrice(sessionId: string, itemId: string, price: number | null): boolean {
+      if (price !== null && !(Number.isFinite(price) && price > 0 && price <= MAX_MAP_ITEM_PRICE)) return false;
+      const inCurrent = sessionId === this.sessionId;
+      const archived = inCurrent ? undefined : this.archivedSessions.find(s => s.id === sessionId);
+      if (!inCurrent && !archived) return false;
+      const changes = this.mapHistory.flatMap(map => {
+        const drop = map.sessionId === sessionId ? map.drops.find(d => d.item_id === itemId) : undefined;
+        if (!drop) return [];
+        const next = price ?? drop.originalPrice ?? drop.price;
+        return [{ map, drop, next, delta: (next - drop.price) * drop.qty }];
+      });
+      if (changes.length === 0) return false;
+      const total = changes.reduce((a, c) => a + c.delta, 0);
+      const fits = (...values: number[]) => values.every(v => Math.abs(v) <= MAX_SAVED_VALUE);
+      const sessionProfit = inCurrent ? this.totalProfit : archived?.profit ?? 0;
+      if (!fits(sessionProfit + total)) return false;
+      if (!changes.every(c => fits(c.next * c.drop.qty, c.map.lootValue + c.delta, c.map.profit + c.delta))) return false;
+      for (const { map, drop, next, delta } of changes) {
+        if (price === null) delete drop.originalPrice;
+        else if (drop.originalPrice === undefined) drop.originalPrice = drop.price;
+        drop.price = next;
+        map.lootValue = Math.max(0, map.lootValue + delta);
+        map.profit += delta;
+      }
+      if (inCurrent) {
+        this.totalProfit += total;
+        const s = this.sessionDrops.find(x => x.item_id === itemId);
+        if (s && s.qty > 0) s.price = Math.max(0, (s.price * s.qty + total) / s.qty);
+      } else if (archived) {
+        archived.profit += total;
+      }
+      this.stateDirty = true;
+      void this.saveStateToDisk();
+      return true;
+    },
+
+    // Removes saved sessions and their maps (linked by MapRecord.sessionId). The current session is never touched.
+    deleteSessions(ids: string[]) {
+      const drop = new Set(ids.filter(id => id !== this.sessionId));
+      if (drop.size === 0) return;
+      this.archivedSessions = this.archivedSessions.filter(s => !drop.has(s.id));
+      this.mapHistory = this.mapHistory.filter(m => !drop.has(m.sessionId));
       this.stateDirty = true;
       void this.saveStateToDisk();
     },
@@ -502,6 +612,8 @@ export const useTrackerStore = defineStore('tracker', {
         fxY: this.fxY,
         fxScale: this.fxScale,
         pauseTimerOnHub: this.pauseTimerOnHub,
+        dashboardTheme: this.dashboardTheme,
+        dashboardFontScale: this.dashboardFontScale,
         widgetPositions: this.widgetPositions,
         blockedItemIds: this.blockedItemIds,
         lowStockEnabled: this.lowStockEnabled
@@ -539,6 +651,10 @@ export const useTrackerStore = defineStore('tracker', {
         }
         if (parsed.blockedItemIds) this.blockedItemIds = parsed.blockedItemIds;
         if (typeof parsed.lowStockEnabled === 'boolean') this.lowStockEnabled = parsed.lowStockEnabled;
+        if (parsed.dashboardTheme === 'dark' || parsed.dashboardTheme === 'light') this.dashboardTheme = parsed.dashboardTheme;
+        if (typeof parsed.dashboardFontScale === 'number') {
+          this.dashboardFontScale = Math.min(1.3, Math.max(0.8, parsed.dashboardFontScale));
+        }
       }
     }
   },
