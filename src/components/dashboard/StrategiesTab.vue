@@ -131,6 +131,7 @@
           <template v-if="showFavorites">
             <span class="heading">Favorites</span>
             <span class="sub">{{ favorites.length }} saved{{ favSort.key.value === 'saved' ? ' · newest first' : '' }} · numbers as they were when saved · filters apply to the ladder only</span>
+            <button v-if="favSort.key.value !== 'saved'" class="st-link" @click="favSort.toggle('saved')">Newest first</button>
           </template>
           <template v-else>
           <span class="heading">{{ heading }}</span>

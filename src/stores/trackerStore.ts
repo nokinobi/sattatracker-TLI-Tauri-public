@@ -479,7 +479,6 @@ export const useTrackerStore = defineStore('tracker', {
       void this.saveStateToDisk();
     },
 
-    // Removes saved sessions and their maps (linked by MapRecord.sessionId). The current session is never touched.
     // Sets what one item was worth in one finished map (price per item), or with null goes back
     // to the recorded value. Only that map and its session's totals change, not the item's price.
     setMapItemPrice(mapId: string, kind: 'drop' | 'expense', itemId: string, price: number | null): boolean {
@@ -522,6 +521,7 @@ export const useTrackerStore = defineStore('tracker', {
       return true;
     },
 
+    // Removes saved sessions and their maps (linked by MapRecord.sessionId). The current session is never touched.
     deleteSessions(ids: string[]) {
       const drop = new Set(ids.filter(id => id !== this.sessionId));
       if (drop.size === 0) return;
