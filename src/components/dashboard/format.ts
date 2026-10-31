@@ -26,6 +26,13 @@ export function fmtPrice(p: number): string {
   return p.toFixed(3);
 }
 
+// True when a price is inside the optional min and max limits.
+export function inPriceRange(price: number, min: number | null, max: number | null): boolean {
+  if (min !== null && price > min) return false;
+  if (max !== null && price < max) return false;
+  return true;
+}
+
 export function fmtTime(ms: number): string {
   return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
