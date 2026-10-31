@@ -43,6 +43,8 @@ export interface InventorySnapshotItem {
 }
 
 const MAX_MAP_ITEM_PRICE = 1e7;
+// The loader (stateSanitize) clamps item totals and map values to this.
+const MAX_SAVED_VALUE = 1e9;
 
 export interface LootItem {
   item_id: string;
@@ -485,6 +487,7 @@ export const useTrackerStore = defineStore('tracker', {
       if (price !== null && !(Number.isFinite(price) && price > 0 && price <= MAX_MAP_ITEM_PRICE)) return false;
       const map = this.mapHistory.find(m => m.id === mapId);
       if (!map) return false;
+      const fits = (...values: number[]) => values.every(v => Math.abs(v) <= MAX_SAVED_VALUE);
       // How much the map's profit changes. Not rounded, so a revert lands exactly where it started.
       let delta: number;
       if (kind === 'drop') {
@@ -492,6 +495,7 @@ export const useTrackerStore = defineStore('tracker', {
         if (!d) return false;
         const next = price ?? d.originalPrice ?? d.price;
         delta = (next - d.price) * d.qty;
+        if (!fits(next * d.qty, map.lootValue + delta, map.profit + delta)) return false;
         if (price === null) delete d.originalPrice;
         else if (d.originalPrice === undefined) d.originalPrice = d.price;
         d.price = next;
@@ -505,6 +509,7 @@ export const useTrackerStore = defineStore('tracker', {
         if (!e) return false;
         const next = price === null ? e.originalTotal ?? e.total : price * e.qty;
         delta = e.total - next;
+        if (!fits(next, map.expenseValue - delta, map.profit + delta)) return false;
         if (price === null) delete e.originalTotal;
         else if (e.originalTotal === undefined) e.originalTotal = e.total;
         e.total = next;

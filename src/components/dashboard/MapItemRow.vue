@@ -27,7 +27,7 @@
       <span class="hint">Only this map. The item's price everywhere else doesn't change.{{ afterTax ? ' Enter the price after market tax, like the recorded one.' : '' }}</span>
       <button class="dash-btn small primary push" type="submit">Apply</button>
       <button class="dash-btn small" type="button" @click="$emit('cancel')">Cancel</button>
-      <span v-if="error" class="err" role="alert">{{ error }}</span>
+      <span v-if="ownError || error" class="err" role="alert">{{ ownError || error }}</span>
     </form>
   </div>
 </template>
@@ -50,27 +50,29 @@ const props = defineProps<{
   editable: boolean;
   editing: boolean;
   afterTax?: boolean;
+  error?: string;
 }>();
 const emit = defineEmits<{ edit: []; revert: []; cancel: []; apply: [price: number] }>();
 
 const MAX_PRICE = 1e7;
 const text = ref('');
-const error = ref('');
+const ownError = ref('');
 const input = ref<HTMLInputElement | null>(null);
 
 watch(() => props.editing, (open) => {
   if (!open) return;
   text.value = String(Math.round(props.unit * 1000) / 1000);
-  error.value = '';
+  ownError.value = '';
   void nextTick(() => input.value?.focus());
 }, { immediate: true });
 
 function apply() {
   const price = Number(text.value.trim().replace(',', '.'));
   if (!Number.isFinite(price) || price <= 0 || price > MAX_PRICE) {
-    error.value = 'Enter a price above 0.';
+    ownError.value = 'Enter a price above 0.';
     return;
   }
+  ownError.value = '';
   emit('apply', price);
 }
 </script>

@@ -128,6 +128,7 @@
                 :was="e.was"
                 :editable="!selected.live && e.qty > 0"
                 :editing="editing === 'e:' + e.id"
+                :error="editError"
                 @edit="editing = 'e:' + e.id"
                 @cancel="editing = ''"
                 @apply="setPrice('expense', e.id, $event)"
@@ -156,6 +157,7 @@
                 :was="d.originalPrice"
                 :editable="!selected.live"
                 :editing="editing === 'd:' + d.item_id"
+                :error="editError"
                 :after-tax="store.applyTax"
                 @edit="editing = 'd:' + d.item_id"
                 @cancel="editing = ''"
@@ -471,8 +473,14 @@ const editCount = computed(() => {
 const editing = ref('');
 watch(selectedId, () => { editing.value = ''; });
 
+const editError = ref('');
+watch(editing, () => { editError.value = ''; });
+
 function setPrice(kind: 'drop' | 'expense', itemId: string, price: number | null) {
-  if (selected.value) store.setMapItemPrice(selected.value.id, kind, itemId, price);
+  if (selected.value && !store.setMapItemPrice(selected.value.id, kind, itemId, price)) {
+    editError.value = 'That price is too high for this quantity.';
+    return;
+  }
   editing.value = '';
 }
 
