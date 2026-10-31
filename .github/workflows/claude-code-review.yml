@@ -1,12 +1,13 @@
 # Claude reviews every pull request into 'stable', a release branch (release/x.y.z), fork/* or feature/*.
-#   verdict  - one Claude run: checks the changes against the review rules in the prompt,
-#              posts an inline comment on the exact line of each problem,
-#              then returns { blocking, summary, checked }. Fails when blocking. Make
+#   verdict  - one Claude run: runs the official code-review plugin, checks the changes against
+#              the review rules in the prompt, posts an inline comment on the exact line of each
+#              problem, then returns { blocking, summary, checked }. Every comment must be fixed
+#              in the same pull request, so any problem is blocking. Fails when blocking. Make
 #              "claude-verdict" a required status check on 'stable' (docs/release/RELEASING.md).
 #   decision - no blocking issues: approves with a short note (why, and what was checked).
 #              Other PRs (features into a release, fixes into fork/* or feature/*) are then merged; a release PR
 #              (release/x.y.z -> stable) is labelled ready-to-promote instead, because a release replaces stable.
-#              Blocking issues: requests changes and labels the PR waiting-for-author.
+#              Any problem: requests changes and labels the PR waiting-for-author.
 # Billed to the Claude subscription behind the CLAUDE_CODE_OAUTH_TOKEN secret.
 name: Claude Code Review
 
@@ -24,6 +25,7 @@ jobs:
     name: claude-verdict
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: write
@@ -37,22 +39,39 @@ jobs:
 
       - id: claude
         uses: anthropics/claude-code-action@v1
+        env:
+          # The review must wait for the plugin's agents; run in the background, it answers without them.
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Merges by claude-decision push to release branches as github-actions[bot]; without
           # this the action refuses the review that push starts ("non-human actor").
           allowed_bots: github-actions
+          plugin_marketplaces: https://github.com/anthropics/claude-plugins-official.git
+          plugins: code-review@claude-plugins-official
           prompt: |
             You review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }},
             which would bring changes into the '${{ github.base_ref }}' branch (the fork's released versions).
             See the changes with `git diff origin/${{ github.base_ref }}...HEAD` and read any files you need.
 
-            Be a strict, thorough reviewer. Approving means you checked every rule below against
-            every changed file and found nothing worth raising, not that you skimmed the diff.
-            Read the code around each change (callers, types, templates, the store or command it
-            talks to) before you judge it; don't review the diff in isolation.
+            Every comment you post must be fixed in this pull request before it can merge: there are
+            no optional suggestions and no follow-up pull requests. So comment only on real problems
+            worth holding the merge for, and don't invent any: each comment points at concrete code
+            and says when it goes wrong. Approving means you checked and found nothing, not that you
+            skimmed the diff.
 
-            Review rules:
+            Step 1: run the code-review plugin. Use the Skill tool for
+            code-review:code-review with ${{ github.repository }}/pull/${{ github.event.pull_request.number }},
+            without --comment, so it reports its validated issues back to you. Follow its steps as
+            written and launch its agents with the Agent tool on every pull request, however small;
+            reading the diff yourself does not replace them. Only ignore its checks that stop on
+            "already commented", "automated" or "trivial". Wait for every agent to finish and use
+            its result before you go on: never answer while one is still running. If its review
+            agents can't run or finish, answer blocking: true and say exactly why in `summary`, so
+            the pull request can't merge on an incomplete review.
+
+            Step 2: check every changed file against these rules, reading the code around each
+            change (callers, types, templates, the store or command it talks to):
             1. Correctness - wrong conditions, off-by-one, unhandled null/undefined/empty values,
                wrong units, async code without await, stale or shared state, race conditions.
             2. Cleanup - event listeners, timers, intervals, observers and subscriptions are removed
@@ -67,9 +86,9 @@ jobs:
                defaults, renamed keys are migrated); nothing a user saved is lost.
             6. Performance - no heavy work in hot paths (per frame, per log line, per render) that
                could be cached; no request bursts against external APIs.
-            7. Consistency - follows the surrounding code's patterns, naming and style; reuses
-               existing helpers instead of duplicating them; no dead code, debug output or
-               commented-out code left behind.
+            7. Consistency - follows CLAUDE.md and the surrounding code's patterns; reuses existing
+               helpers instead of duplicating them; no dead code, debug output or commented-out
+               code left behind.
             8. UI - text fits (long item names, big numbers), controls have labels, layouts hold at
                the sizes the feature supports.
             9. Docs and tests - user-visible behaviour changes are reflected in docs/features/;
@@ -77,25 +96,22 @@ jobs:
             10. Release tooling and workflows - scripts and workflows keep working (flags,
                permissions, paths, branch names).
 
-            Then:
-            a. For every problem you find, post ONE inline comment on the exact line with
-               mcp__github_inline_comment__create_inline_comment (path and line in the new
-               version of the file). Start the body with "**Blocking:**" for real defects -
-               bugs that break the app or a feature, build or type errors, security or privacy
-               problems, data loss or saved data that no longer loads, broken release tooling -
-               or "**Suggestion:**" for real but non-breaking issues (unlikely edge cases,
-               missing cleanup or docs, duplication, maintainability, performance). Say what is
-               wrong, when it goes wrong, and how to fix it in two or three sentences. Up to 6
-               suggestions, most important first. Skip pure formatting and naming taste, and
-               don't invent problems: every comment points at concrete code. Don't comment on
-               lines the PR doesn't change unless the change breaks them.
-            b. Answer with:
-               - blocking: true if any Blocking comment was posted, otherwise false
+            Step 3: for the problems from steps 1 and 2 together:
+            a. Read the review comments already on this pull request with
+               `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments`.
+            b. For every problem not already commented on, post ONE inline comment on the exact line
+               with mcp__github_inline_comment__create_inline_comment (path and line in the new
+               version of the file). Say what is wrong, when it goes wrong, and how to fix it in two
+               or three sentences. Skip pure formatting and naming taste. Don't comment on lines the
+               PR doesn't change unless the change breaks them.
+            c. Answer with:
+               - blocking: true if any problem exists in this commit, including one commented on
+                 earlier that is still not fixed; otherwise false
                - summary: one or two sentences - why it can or can't be released
-               - checked: 4 to 8 short items naming what you verified, by rule
-                 (e.g. "listeners removed on unmount", "old saved settings still load")
+               - checked: 4 to 8 short items naming what you verified, by rule, and how many
+                 code-review plugin agents finished (e.g. "listeners removed on unmount")
           claude_args: >-
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Read,Grep,Glob"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Skill,Agent,Task,TodoWrite,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Read,Grep,Glob"
             --json-schema '{"type":"object","properties":{"blocking":{"type":"boolean"},"summary":{"type":"string"},"checked":{"type":"array","items":{"type":"string"}}},"required":["blocking","summary","checked"]}'
 
       - name: Report verdict
@@ -174,7 +190,7 @@ jobs:
             gh pr edit "$PR" --remove-label ready-to-promote >/dev/null 2>&1 || true
             gh pr edit "$PR" --add-label waiting-for-author >/dev/null
             if [ -n "$checked" ]; then
-              printf '**Changes needed.** %s\n\nDetails are in the inline comments marked **Blocking**. Push fixes to this branch; the review runs again and, once it passes, approves and merges automatically.\n\n**Checked:**\n%s\n' "$summary" "$checked" > body.md
+              printf '**Changes needed.** %s\n\nEvery inline comment must be fixed in this pull request. Push fixes to this branch; the review runs again and, once it passes, approves and merges automatically.\n\n**Checked:**\n%s\n' "$summary" "$checked" > body.md
             else
               printf '**Changes needed.** %s\n' "$summary" > body.md
             fi
