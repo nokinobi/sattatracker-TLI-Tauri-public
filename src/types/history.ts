@@ -8,6 +8,8 @@ export interface RecordDrop {
   item_name: string;
   qty: number;
   price: number;
+  // The recorded price, kept while the user has set their own for this map.
+  originalPrice?: number;
 }
 
 export interface RecordExpense {
@@ -15,6 +17,8 @@ export interface RecordExpense {
   name: string;
   qty: number;
   total: number;
+  // The recorded cost, kept while the user has set their own price for this map.
+  originalTotal?: number;
 }
 
 export interface MapRecord {

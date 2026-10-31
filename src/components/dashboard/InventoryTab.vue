@@ -22,15 +22,6 @@
           <button :class="{ on: !onlyBlocked }" @click="onlyBlocked = false">All</button>
           <button :class="{ on: onlyBlocked }" @click="onlyBlocked = true">Blocked</button>
         </div>
-        <label class="sort">
-          <span>Sort</span>
-          <select v-model="sortBy">
-            <option value="value">Total value</option>
-            <option value="price">Unit price</option>
-            <option value="qty">Quantity</option>
-            <option value="name">Name</option>
-          </select>
-        </label>
       </div>
     </div>
 
@@ -39,7 +30,13 @@
     </div>
     <template v-else>
       <div class="inv-head">
-        <span></span><span>Item</span><span>Bag tab</span><span class="r">Quantity</span><span class="r">Unit price</span><span class="r">Total</span><span></span>
+        <span></span>
+        <SortHead label="Item" :active="sort.key.value === 'name'" :dir="sort.dir.value" @sort="sort.toggle('name')" />
+        <SortHead label="Bag tab" :active="sort.key.value === 'tab'" :dir="sort.dir.value" @sort="sort.toggle('tab')" />
+        <SortHead class="r" label="Quantity" :active="sort.key.value === 'qty'" :dir="sort.dir.value" @sort="sort.toggle('qty')" />
+        <SortHead class="r" label="Unit price" :active="sort.key.value === 'price'" :dir="sort.dir.value" @sort="sort.toggle('price')" />
+        <SortHead class="r" label="Total" :active="sort.key.value === 'value'" :dir="sort.dir.value" @sort="sort.toggle('value')" />
+        <span></span>
       </div>
       <div class="inv-list dash-scroll">
         <div v-if="filtered.length === 0" class="dash-empty">Nothing matches</div>
@@ -70,13 +67,15 @@ import { useTrackerStore } from '../../stores/trackerStore';
 import { getIcon } from '../../utils/assets';
 import { BAG_PAGES, bagPageLabel } from './categories';
 import { fmtPrice, fmtValue } from './format';
+import SortHead from './SortHead.vue';
+import { sortedBy, useSort } from './useSort';
 
 const store = useTrackerStore();
 
 const query = ref('');
 const page = ref<number | 'all'>('all');
 const onlyBlocked = ref(false);
-const sortBy = ref<'value' | 'price' | 'qty' | 'name'>('value');
+const sort = useSort('inventory', { name: 'asc', tab: 'asc', qty: 'desc', price: 'desc', value: 'desc' }, 'value');
 
 const items = computed(() =>
   store.inventoryItems.map(i => ({
@@ -106,13 +105,15 @@ const filtered = computed(() => {
     && (!onlyBlocked.value || i.blocked)
     && (!q || i.item_name.toLowerCase().includes(q) || (i.item_type ?? '').toLowerCase().includes(q)),
   );
-  const by = sortBy.value;
-  return list.sort((a, b) =>
-    by === 'name' ? a.item_name.localeCompare(b.item_name)
-      : by === 'qty' ? b.qty - a.qty
-        : by === 'price' ? b.price - a.price
-          : b.value - a.value,
-  );
+  const by = sort.key.value;
+  return sortedBy(list, i => {
+    if (by === 'name') return i.item_name;
+    if (by === 'tab') return bagPageLabel(i.page_id);
+    if (by === 'qty') return i.qty;
+    if (i.price <= 0) return null;
+    if (by === 'price') return i.price;
+    return i.blocked ? null : i.value;
+  }, sort.dir.value);
 });
 
 function toggleBlock(id: string, blocked: boolean) {
@@ -134,7 +135,6 @@ function toggleBlock(id: string, blocked: boolean) {
 .inv-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .inv-filters .dash-seg { margin-left: auto; }
-.sort { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
 
 .inv-head, .inv-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 140px 74px 74px 90px 64px; gap: 12px; align-items: center; }
 .inv-head { padding: 8px 30px 4px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--label); }

@@ -53,19 +53,15 @@
             <button :class="{ on: blockedFilter === 'blocked' }" @click="blockedFilter = 'blocked'">Blocked</button>
             <button :class="{ on: blockedFilter === 'manual' }" @click="blockedFilter = 'manual'">Manual {{ manualCount }}</button>
           </div>
-          <label class="sort">
-            <span>Sort</span>
-            <select v-model="sortBy">
-              <option value="desc">Price, high to low</option>
-              <option value="asc">Price, low to high</option>
-              <option value="name">Name</option>
-            </select>
-          </label>
         </div>
       </div>
 
       <div class="pr-head">
-        <span></span><span>Item</span><span class="r">Price</span><span class="r">In bag</span><span></span>
+        <span></span>
+        <SortHead label="Item" :active="sort.key.value === 'name'" :dir="sort.dir.value" @sort="sort.toggle('name')" />
+        <SortHead class="r" label="Price" :active="sort.key.value === 'price'" :dir="sort.dir.value" @sort="sort.toggle('price')" />
+        <SortHead class="r" label="In bag" :active="sort.key.value === 'bag'" :dir="sort.dir.value" @sort="sort.toggle('bag')" />
+        <span></span>
       </div>
       <div class="pr-list dash-scroll">
         <div v-if="loading && prices.length === 0" class="dash-empty">Loading prices…</div>
@@ -117,6 +113,8 @@ import { useTrackerStore } from '../../stores/trackerStore';
 import { getIcon } from '../../utils/assets';
 import { PRICE_GROUPS, priceGroup, type PriceGroup } from './categories';
 import { fmtAgo, fmtLeft, fmtPrice } from './format';
+import SortHead from './SortHead.vue';
+import { sortedBy, useSort } from './useSort';
 
 interface PriceEntry {
   item_id: string;
@@ -150,7 +148,7 @@ const query = ref('');
 const minPrice = ref<number | ''>('');
 const maxPrice = ref<number | ''>('');
 const blockedFilter = ref<'all' | 'counted' | 'blocked' | 'manual'>('all');
-const sortBy = ref<'desc' | 'asc' | 'name'>('desc');
+const sort = useSort('prices', { name: 'asc', price: 'desc', bag: 'desc' }, 'price');
 const limit = ref(PAGE);
 
 async function load() {
@@ -289,11 +287,8 @@ const filtered = computed(() => {
     && (blockedFilter.value === 'all'
       || (blockedFilter.value === 'manual' ? p.manual : (blockedFilter.value === 'blocked') === p.blocked)),
   );
-  return list.sort((a, b) =>
-    sortBy.value === 'name' ? a.item_name.localeCompare(b.item_name)
-      : sortBy.value === 'asc' ? a.price - b.price
-        : b.price - a.price,
-  );
+  const by = sort.key.value;
+  return sortedBy(list, p => (by === 'name' ? p.item_name : by === 'bag' ? p.owned : p.price), sort.dir.value);
 });
 
 const visible = computed(() => filtered.value.slice(0, limit.value));
@@ -320,7 +315,7 @@ function selectGroup(id: PriceGroup | 'all') {
   type.value = 'all';
 }
 
-watch([group, type, query, minPrice, maxPrice, blockedFilter, sortBy], () => { limit.value = PAGE; });
+watch([group, type, query, minPrice, maxPrice, blockedFilter, sort.key, sort.dir], () => { limit.value = PAGE; });
 </script>
 
 <style scoped>
@@ -351,7 +346,6 @@ watch([group, type, query, minPrice, maxPrice, blockedFilter, sortBy], () => { l
 .pr-filters { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
 .pr-num { width: 64px; font-size: 11px; padding: 4px 8px; border-radius: 6px; background: var(--input); border: 1px solid var(--chip-border); color: var(--text); outline: none; }
 .pr-filters .dash-seg { margin-left: 10px; }
-.sort { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 
 .pr-head, .pr-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 100px 60px 76px; gap: 12px; align-items: center; }
 .pr-head { padding: 8px 30px 4px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--label); }

@@ -356,6 +356,10 @@ watch(() => props.isOpen, (open) => {
 .dash-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 .dash-label { font-size: 9px; letter-spacing: 1.8px; text-transform: uppercase; color: var(--label); }
+.dash-sort { padding: 0; min-width: 0; white-space: nowrap; font: inherit; letter-spacing: inherit; text-transform: inherit; text-align: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+.dash-sort:hover { color: var(--strong); }
+.dash-sort.on { font-weight: 700; color: var(--accent-text); }
+.dash-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .dash-panel { border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-border); }
 .dash-chip { font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 999px; cursor: pointer; background: var(--chip); border: 1px solid var(--chip-border); color: var(--muted); }
 .dash-chip .n { opacity: 0.7; margin-left: 3px; }

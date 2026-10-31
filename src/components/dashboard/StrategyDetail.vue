@@ -29,6 +29,7 @@
           <div :class="['mono', 'val', perHourNow >= 0 ? 'pos' : 'neg']">{{ detail ? fmtInt(perHourNow) : '…' }}</div>
           <div v-if="detail" class="sub">
             <span :class="change >= 0 ? 'pos' : 'neg'">{{ fmtChange(change) }}</span> vs reported {{ fmtInt(perHourReported) }}
+            <template v-if="excludedRows.length"> · <b class="without">without {{ excludedLabel }}</b></template>
           </div>
         </div>
         <div class="stat">
@@ -76,6 +77,10 @@
         <div class="today">
           <div class="dash-label accent">Same run at today's prices</div>
           <div class="line"><span>Loot per map</span><span class="mono gold">{{ fmtFE(perMap.loot) }}</span></div>
+          <div v-if="excludedRows.length" class="line without">
+            <span>Without {{ excludedLabel }} <button class="sd-link" @click="clearExcluded">Count all</button></span>
+            <span class="mono">{{ fmtFE(-excludedValue) }}</span>
+          </div>
           <div class="line"><span>Cost per map</span><span class="mono neg">{{ fmtFE(-perMap.cost) }}</span></div>
           <div class="rule"></div>
           <div class="line total">
@@ -106,26 +111,47 @@
         <div class="loot-head">
           <span class="dash-label">Strategy loot · {{ maps }} maps</span>
           <div class="dash-seg" role="group" aria-label="Loot view">
-            <button :class="{ on: !rareOnly }" @click="rareOnly = false">All {{ loot.length }}</button>
-            <button :class="{ on: rareOnly }" @click="rareOnly = true">
+            <button :class="{ on: lootView === 'all' }" @click="lootView = 'all'">All {{ loot.length }}</button>
+            <button :class="{ on: lootView === 'rare' }" @click="lootView = 'rare'">
               <svg width="9" height="9" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1l5 5-5 5-5-5z" fill="var(--gold)"/></svg>
               Rare drops {{ rareCount }}
             </button>
+            <button :class="{ on: lootView === 'excluded' }" @click="lootView = 'excluded'">Excluded {{ excludedRows.length }}</button>
           </div>
-          <span class="loot-note">{{ rareOnly ? 'Drop in fewer than 1 of 5 maps: the lucky drops' : 'All items dropped in these maps · FE shown per map' }}</span>
+          <button v-if="lootView === 'rare' && rareCount > 0" class="dash-btn small rare-all" :disabled="!allRareOut && excludeBlocked" @click="toggleAllRare">{{ allRareOut ? 'Count all rare' : 'Exclude all rare' }}</button>
+          <span class="loot-note">{{ lootView === 'rare' ? 'Lucky drops: under 1 of 5 maps' : lootView === 'excluded' ? 'Left out of the profit on the left' : 'All items dropped in these maps · FE shown per map' }}</span>
+        </div>
+        <div class="loot-cols">
+          <span></span>
+          <SortHead label="Item" :active="lootSort.key.value === 'name'" :dir="lootSort.dir.value" @sort="lootSort.toggle('name')" />
+          <SortHead label="Drops" :active="lootSort.key.value === 'rate'" :dir="lootSort.dir.value" @sort="lootSort.toggle('rate')" />
+          <SortHead class="r" label="Total" :active="lootSort.key.value === 'total'" :dir="lootSort.dir.value" @sort="lootSort.toggle('total')" />
+          <SortHead class="r" label="FE / map" :active="lootSort.key.value === 'value'" :dir="lootSort.dir.value" @sort="lootSort.toggle('value')" />
+          <span></span>
         </div>
         <div class="loot-list dash-scroll">
-          <div v-if="!shownLoot.length" class="dash-empty">No rare drops in this strategy</div>
-          <div v-for="l in shownLoot" :key="l.id" :class="['loot-row', { rare: l.rare }]">
+          <div v-if="!shownLoot.length" class="dash-empty">{{ lootView === 'excluded' ? 'Nothing excluded. Use the minus button on a loot row to leave it out of the profit.' : 'No rare drops in this strategy' }}</div>
+          <div v-for="l in shownLoot" :key="l.id" :class="['loot-row', { rare: l.rare, out: excluded.has(l.id) }]">
             <span class="dash-icon"><img :src="getIcon(l.id)" alt="" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" /></span>
             <span class="name">
               <svg v-if="l.rare" width="10" height="10" viewBox="0 0 12 12" role="img" aria-label="Rare drop"><path d="M6 1l5 5-5 5-5-5z" fill="var(--gold)"/></svg>
               <span>{{ l.name }}</span>
             </span>
             <span :class="['mono', 'rate', { rare: l.rare }]">{{ l.rate }}</span>
-            <span class="mono gold strong r">{{ l.value }}</span>
+            <span class="mono r total" :title="`${l.quantity.toLocaleString()} dropped across ${maps.toLocaleString()} maps`">×{{ l.quantity.toLocaleString() }}</span>
+            <span class="mono gold strong r amount">{{ l.value }}</span>
+            <button
+              :class="['exc', { on: excluded.has(l.id) }]"
+              :aria-pressed="excluded.has(l.id)"
+              :disabled="!excluded.has(l.id) && excludeBlocked"
+              :aria-label="`${excluded.has(l.id) ? 'Count in the profit again' : 'Leave out of the profit'}: ${l.name}`"
+              :title="excluded.has(l.id) ? 'Count this in the profit again' : excludeBlocked ? 'Too many strategies with excluded loot' : 'Leave this out of the profit'"
+              @click="toggleExcluded(l.id)"
+            >
+              <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </button>
           </div>
-          <button v-if="!rareOnly && !allLoot && loot.length > LOOT_ROWS" class="sd-more" @click="allLoot = true">Show all {{ loot.length }} items</button>
+          <button v-if="lootView === 'all' && !allLoot && loot.length > LOOT_ROWS" class="sd-more" @click="allLoot = true">Show all {{ loot.length }} items</button>
         </div>
       </div>
     </div>
@@ -136,12 +162,15 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { getIcon } from '../../utils/assets';
 import { fmtDate, fmtDur, fmtFE, fmtPrice } from './format';
+import SortHead from './SortHead.vue';
+import { sortedBy, useSort } from './useSort';
 import TalentTrees from './TalentTrees.vue';
 import {
   areaName, fetchDetail, itemInfo, itemKind, stageName, timeName, treeList, treeName,
   type DetailData, type ItemInfo, type ItemQty, type StrategyRow,
 } from './strategies/api';
 import { detailView } from './strategies/state';
+import { excludedFor, excludedFull, setExcluded } from './strategies/excluded';
 import { NOTE_MAX, favoriteOf, favoritesFull, setNote, toggleFavorite } from './strategies/favorites';
 
 const props = defineProps<{ row: StrategyRow; stage: string; seasonId: string }>();
@@ -158,7 +187,10 @@ const detail = ref<DetailData | null>(null);
 const failed = ref(false);
 const info = ref(new Map<string, ItemInfo>());
 const allLoot = ref(false);
-const rareOnly = ref(false);
+const lootView = ref<'all' | 'rare' | 'excluded'>('all');
+const lootSort = useSort('strategy-loot', { name: 'asc', rate: 'desc', total: 'desc', value: 'desc' }, 'value');
+// Items left out of the profit for this strategy and period.
+const excluded = ref(excludedFor(props.stage, props.row.key));
 // Remembered with the rest of the Strategies tab, so a reopened detail shows the same view.
 const view = detailView;
 
@@ -209,7 +241,7 @@ function perMapRows(list: ItemQty[]) {
       const price = it?.price ?? 0;
       const perMap = i.quantity / maps.value;
       const total = perMap * price;
-      return { id: i.id, name: it?.name || `Item ${i.id}`, perMap, price, total, rare: perMap < RARE_SHARE && total > RARE_MIN_VALUE };
+      return { id: i.id, name: it?.name || `Item ${i.id}`, quantity: i.quantity, perMap, price, total, rare: perMap < RARE_SHARE && total > RARE_MIN_VALUE };
     })
     .sort((a, b) => b.total - a.total || b.perMap - a.perMap)
     .map(r => ({
@@ -225,13 +257,50 @@ function perMapRows(list: ItemQty[]) {
 const cost = computed(() => perMapRows(detail.value?.items.cost ?? []).filter(c => c.perMap >= 0.05));
 const loot = computed(() => perMapRows(detail.value?.items.loot ?? []));
 const rareCount = computed(() => loot.value.filter(l => l.rare).length);
+const excludedRows = computed(() => loot.value.filter(l => excluded.value.has(l.id)));
+const excludedValue = computed(() => excludedRows.value.reduce((s, l) => s + l.total, 0));
+const excludedLabel = computed(() => (excludedRows.value.length === 1 ? '1 excluded item' : `${excludedRows.value.length} excluded items`));
+// A strategy with nothing excluded yet can't start a new entry when the saved list is full.
+const excludeBlocked = computed(() => excludedFull.value && excluded.value.size === 0);
+const allRareOut = computed(() => {
+  const rare = loot.value.filter(l => l.rare);
+  return rare.length > 0 && rare.every(l => excluded.value.has(l.id));
+});
+
+function saveExcluded(next: Set<string>) {
+  excluded.value = next;
+  setExcluded(props.stage, props.row.key, next);
+}
+
+function toggleExcluded(id: string) {
+  const next = new Set(excluded.value);
+  if (!next.delete(id)) next.add(id);
+  saveExcluded(next);
+}
+
+function toggleAllRare() {
+  const next = new Set(excluded.value);
+  const rare = loot.value.filter(l => l.rare);
+  if (allRareOut.value) rare.forEach(l => next.delete(l.id));
+  else rare.forEach(l => next.add(l.id));
+  saveExcluded(next);
+}
+
+function clearExcluded() {
+  saveExcluded(new Set());
+}
+
 const shownLoot = computed(() => {
-  if (rareOnly.value) return loot.value.filter(l => l.rare);
-  return allLoot.value ? loot.value : loot.value.slice(0, LOOT_ROWS);
+  const by = lootSort.key.value;
+  const list = lootView.value === 'rare' ? loot.value.filter(l => l.rare)
+    : lootView.value === 'excluded' ? excludedRows.value
+      : loot.value;
+  const sorted = sortedBy(list, l => (by === 'name' ? l.name : by === 'value' ? l.total : l.perMap), lootSort.dir.value);
+  return lootView.value === 'all' && !allLoot.value ? sorted.slice(0, LOOT_ROWS) : sorted;
 });
 
 const perMap = computed(() => {
-  const l = loot.value.reduce((s, r) => s + r.total, 0);
+  const l = loot.value.reduce((s, r) => s + r.total, 0) - excludedValue.value;
   const c = perMapRows(detail.value?.items.cost ?? []).reduce((s, r) => s + r.total, 0);
   return { loot: l, cost: c, profit: l - c };
 });
@@ -343,13 +412,28 @@ const tagChips = computed(() => {
 .loot-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .loot-head .dash-seg button { gap: 5px; }
 .loot-note { margin-left: auto; font-size: 10.5px; color: var(--label); }
+.rare-all { align-self: center; color: var(--gold); border-color: rgba(217,119,6,0.5); }
+.rare-all:disabled { opacity: 0.5; cursor: default; }
+.loot-cols { display: grid; grid-template-columns: 30px minmax(0, 1fr) 96px 66px 64px 20px; gap: 8px; padding: 0 9px; font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--label); }
+.loot-cols .r { text-align: right; }
+.without { color: var(--gold); font-weight: 600; }
+.today .without { font-size: 10.5px; margin-top: -3px; }
+.today .without .mono { font-size: 10.5px; font-weight: 500; }
+.sd-link { padding: 0 0 0 4px; font: inherit; font-weight: 600; background: none; border: none; cursor: pointer; color: var(--accent-text); }
 .loot-list { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 3px; }
-.loot-row { flex-shrink: 0; display: grid; grid-template-columns: 30px minmax(0, 1fr) 104px 56px; gap: 8px; align-items: center; padding: 3px 8px; border-radius: 8px; font-size: 11.5px; background: var(--panel); border: 1px solid var(--panel-border); }
+.loot-row { flex-shrink: 0; display: grid; grid-template-columns: 30px minmax(0, 1fr) 96px 66px 64px 20px; gap: 8px; align-items: center; padding: 3px 8px; border-radius: 8px; font-size: 11.5px; background: var(--panel); border: 1px solid var(--panel-border); }
 .loot-row.rare { border-color: rgba(217,119,6,0.45); }
 .loot-row .name { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--strong); }
 .loot-row .name span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .loot-row .rate { font-size: 10.5px; color: var(--muted); }
 .loot-row .rate.rare { color: var(--gold); }
+.loot-row .total { font-size: 10.5px; color: var(--muted); }
+.loot-row.out { opacity: 0.6; }
+.loot-row.out .name span, .loot-row.out .amount { text-decoration: line-through; }
+.loot-row .exc { width: 20px; height: 20px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 5px; cursor: pointer; background: var(--chip); border: 1px solid var(--chip-border); color: var(--muted); }
+.loot-row .exc:hover { border-color: var(--neg); color: var(--neg); }
+.loot-row .exc.on { background: var(--neg); border-color: var(--neg); color: #fff; }
+.loot-row .exc:disabled { opacity: 0.4; cursor: default; }
 .r { text-align: right; }
 .strong { font-weight: 700; }
 .sd-more { align-self: flex-start; margin-top: 4px; padding: 0; font-size: 11px; background: none; border: none; color: var(--accent); cursor: pointer; }

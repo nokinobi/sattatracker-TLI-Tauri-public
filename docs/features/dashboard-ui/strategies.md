@@ -11,7 +11,7 @@ The data comes from the community strategy ladder: players' trackers upload thei
 Every section collapses from its header; a collapsed section still shows what is picked. The tab remembers which sections you closed.
 
 - **Timemark:** All, T7-1, T7-2, T8-1, T8-2, Profound or Deep Space, with each one's share of the reported maps.
-- **Rank by:** profit per hour or maps run.
+- **Rank by:** profit per hour or maps run. The list's column headers do the same, and also offer FE per map.
 - **Maps run:** only strategies with at least this many maps (30 by default).
 - **Search:** narrows the lists below.
 - **Mechanics:** the talent constellations (Profound left out), with the share of strategies that put points into each.
@@ -26,6 +26,7 @@ Click a value to add it to the filters, click it again to remove it; the minus b
 - 10 strategies per page, one request per page. A line under the filters runs while results load. The compasses and astrolabes a strategy uses are shown in its detail, so the list doesn't need a request per row.
 - If loading fails (the server is busy, rate limiting or unreachable), a notice says what couldn't load and why, the list keeps the previous results, the tab tries once more after a few seconds and offers **Retry**.
 - The star at the end of a row saves the strategy to your favorites (see below).
+- **Sort** by clicking **Profit / hour**, **Maps** or **FE / map** in the list's header. The server does the ranking, across all matching strategies, and only from high to low. Strategy and Time can't be ranked on the server, so they aren't clickable here.
 
 ## Coming back to the tab
 
@@ -39,6 +40,7 @@ The filters, search, page, period, the open strategy and its view (Loot & cost o
 
 - **Save a strategy:** click the star on its row, or **Save to favorites** in its detail. Click again (**In favorites**) to remove it. A favorite belongs to the period it was saved from: the same strategy in another week is starred separately, with its own note.
 - **Note:** a saved strategy's detail has a **Your note** box under the header, for why you saved it, what to try or how it went (up to 500 characters). It's saved as you type.
+- **Sorting favorites:** favorites are on your computer, so every column header sorts them, in both directions.
 - **Favorites list:** the **Ladder / Favorites** switch at the top of the list shows your saved strategies, newest first, with your note, the period they're from and when you saved them. The numbers are the ones the strategy had when you saved it. The filters on the left apply to the ladder only and are dimmed while favorites are shown.
 - Click a favorite to open its detail for the period it was saved from. If the server no longer has that strategy (an older period or season), the detail says so; the note and the saved numbers stay.
 - Favorites are kept on your computer across seasons, up to 200; when the list is full, remove one before saving another.
@@ -58,7 +60,11 @@ Click a strategy to open it. The header shows:
 
 - **Same run at today's prices:** loot per map, cost per map, profit per map (loot − cost) and profit per hour, valued at the prices the tracker has now, next to what the strategy reported back then.
 - **Cost per map:** each item used, how many per map, its price and FE.
-- **Strategy loot:** every item dropped in the strategy's maps, shown per map: how often it drops (`1 in 98 maps`, `2.3 / map`) and its FE per map. **Rare drops** lists the lucky ones only: items found in fewer than one of five maps that are still worth something.
+- **Strategy loot:** every item dropped in the strategy's maps, shown per map: how often it drops (`1 in 98 maps`, `2.3 / map`) and its FE per map. **Total** is how many dropped across all the strategy's maps, which shows how much a rate like `1 in 98 maps` is based on. **Rare drops** lists the lucky ones only: items found in fewer than one of five maps that are still worth something. Click a column header to sort; click again to reverse.
+- **Leave loot out of the profit:** to see a strategy without its lucky drops, click the minus button at the end of a loot row, or **Exclude all rare** in the Rare drops view. **Excluded** lists what you left out.
+  - Loot per map, Profit per map and Profit per hour recalculate at once, here and in the top strip, which says `without 2 excluded items`. **Count all** brings everything back.
+  - The change against the reported rate still compares with the full reported number, because the server reports totals only. The ladder keeps its reported numbers too.
+  - Exclusions are saved per strategy and period, so they're still there after closing F6 or restarting.
 
 The data has totals per strategy, not single maps, so the loot can't be split by map.
 
@@ -86,6 +92,7 @@ The data has totals per strategy, not single maps, so the loot can't be split by
 - `src/components/dashboard/StrategiesTab.vue`: filters, list, paging and the favorites list.
 - `src/components/dashboard/strategies/state.ts`: the tab's state, kept while the dashboard is closed and saved between runs (`tli_strategies_state` in local storage).
 - `src/components/dashboard/strategies/favorites.ts`: saved strategies and notes (`tli_strategy_favorites`).
+- `src/components/dashboard/strategies/excluded.ts`: loot left out of a strategy's profit (`tli_strategy_excluded`).
 - `src/components/dashboard/StrategyDetail.vue`: the detail view.
 - `src/components/dashboard/TalentTrees.vue`: constellation tiles and tree drawing.
 - `src/components/dashboard/strategies/api.ts`: requests, caching of details and English labels.

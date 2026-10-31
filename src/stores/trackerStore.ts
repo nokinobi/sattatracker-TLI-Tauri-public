@@ -42,6 +42,8 @@ export interface InventorySnapshotItem {
   price:     number;
 }
 
+const MAX_MAP_ITEM_PRICE = 1e7;
+
 export interface LootItem {
   item_id: string;
   item_name: string;
@@ -478,6 +480,48 @@ export const useTrackerStore = defineStore('tracker', {
     },
 
     // Removes saved sessions and their maps (linked by MapRecord.sessionId). The current session is never touched.
+    // Sets what one item was worth in one finished map (price per item), or with null goes back
+    // to the recorded value. Only that map and its session's totals change, not the item's price.
+    setMapItemPrice(mapId: string, kind: 'drop' | 'expense', itemId: string, price: number | null): boolean {
+      if (price !== null && !(Number.isFinite(price) && price > 0 && price <= MAX_MAP_ITEM_PRICE)) return false;
+      const map = this.mapHistory.find(m => m.id === mapId);
+      if (!map) return false;
+      // How much the map's profit changes. Not rounded, so a revert lands exactly where it started.
+      let delta: number;
+      if (kind === 'drop') {
+        const d = map.drops.find(x => x.item_id === itemId);
+        if (!d) return false;
+        const next = price ?? d.originalPrice ?? d.price;
+        delta = (next - d.price) * d.qty;
+        if (price === null) delete d.originalPrice;
+        else if (d.originalPrice === undefined) d.originalPrice = d.price;
+        d.price = next;
+        map.lootValue = Math.max(0, map.lootValue + delta);
+        if (map.sessionId === this.sessionId) {
+          const s = this.sessionDrops.find(x => x.item_id === itemId);
+          if (s && s.qty > 0) s.price = Math.max(0, (s.price * s.qty + delta) / s.qty);
+        }
+      } else {
+        const e = map.expenses.find(x => x.id === itemId);
+        if (!e) return false;
+        const next = price === null ? e.originalTotal ?? e.total : price * e.qty;
+        delta = e.total - next;
+        if (price === null) delete e.originalTotal;
+        else if (e.originalTotal === undefined) e.originalTotal = e.total;
+        e.total = next;
+        map.expenseValue = Math.max(0, map.expenseValue - delta);
+      }
+      map.profit += delta;
+      if (map.sessionId === this.sessionId) this.totalProfit += delta;
+      else {
+        const archived = this.archivedSessions.find(s => s.id === map.sessionId);
+        if (archived) archived.profit += delta;
+      }
+      this.stateDirty = true;
+      void this.saveStateToDisk();
+      return true;
+    },
+
     deleteSessions(ids: string[]) {
       const drop = new Set(ids.filter(id => id !== this.sessionId));
       if (drop.size === 0) return;
