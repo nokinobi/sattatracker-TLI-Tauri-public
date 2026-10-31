@@ -12,7 +12,7 @@
         <button :class="{ on: view === 'loot' }" @click="view = 'loot'">Loot</button>
       </div>
       <div class="ss-summary">
-        <div v-for="c in summary" :key="c.label">
+        <div v-for="c in view === 'loot' ? lootSummary : summary" :key="c.label">
           <div class="dash-label">{{ c.label }}</div>
           <div class="mono val" :class="c.tone">{{ c.value }}</div>
         </div>
@@ -171,22 +171,63 @@
     </div>
 
     <div v-else class="ss-lootview">
+      <div v-if="lootGroups.length > 1 || lootScopeSession === null || lootEditCount > 0" class="ss-loot-tools">
+        <div v-if="lootGroups.length > 1" class="ss-chips" role="group" aria-label="Item group">
+          <button :class="['dash-chip', { on: lootGroup === 'all' }]" @click="pickLootGroup('all')">All<span class="n">{{ scopeLoot.length }}</span></button>
+          <button v-for="g in lootGroups" :key="g.id" :class="['dash-chip', { on: lootGroup === g.id }]" @click="pickLootGroup(g.id)">{{ g.id }}<span class="n">{{ g.n }}</span></button>
+        </div>
+        <div v-if="lootGroup !== 'all'" class="ss-chips" role="group" aria-label="Item type">
+          <button :class="['dash-chip', { on: lootType === 'all' }]" @click="lootType = 'all'">All<span class="n">{{ inLootGroup.length }}</span></button>
+          <button v-for="t in lootTypes" :key="t.id" :class="['dash-chip', { on: lootType === t.id }]" @click="lootType = t.id">{{ t.id }}<span class="n">{{ t.n }}</span></button>
+        </div>
+        <div v-if="lootScopeSession === null" class="ss-loot-note">All time spans several sessions, so prices can't be edited here. Pick one session to change a price.</div>
+        <div v-if="lootEditCount > 0" class="ss-edits">
+          <b>{{ lootEditCount === 1 ? '1 price edited in this session' : `${lootEditCount} prices edited in this session` }}</b>
+          <span>This session's totals and its maps' profit are recalculated. Other sessions don't change.</span>
+          <button class="dash-btn small" @click="revertLootAll">Revert all</button>
+        </div>
+      </div>
       <div class="ss-loot-head">
         <span></span>
         <SortHead label="Item · everything dropped" :active="lootSort.key.value === 'name'" :dir="lootSort.dir.value" @sort="lootSort.toggle('name')" />
         <SortHead label="Share of loot" :active="lootSort.key.value === 'share'" :dir="lootSort.dir.value" @sort="lootSort.toggle('share')" />
         <SortHead class="r" label="Value" :active="lootSort.key.value === 'value'" :dir="lootSort.dir.value" @sort="lootSort.toggle('value')" />
+        <span></span>
       </div>
-      <div v-if="scopeLoot.length === 0" class="dash-empty">Nothing dropped in this selection</div>
+      <div v-if="shownLoot.length === 0" class="dash-empty">Nothing dropped in this selection</div>
       <div v-else class="ss-loot-list dash-scroll">
-        <div v-for="d in scopeLoot" :key="d.item_id" class="ss-loot-line">
-          <span class="dash-icon"><img :src="getIcon(d.item_id)" alt="" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" /></span>
-          <span class="name">
-            <span>{{ d.item_name }}</span>
-            <small>x{{ d.qty }}{{ d.maps ? ` · dropped in ${d.maps} maps` : '' }}</small>
-          </span>
-          <span class="bar"><span><i :style="{ width: d.bar + '%' }"></i></span><b class="mono">{{ d.share.toFixed(0) }}%</b></span>
-          <span class="mono gold r">{{ fmtValue(d.value) }} FE</span>
+        <div v-for="d in shownLoot" :key="d.item_id" :class="['ss-loot-item', { edited: d.was !== undefined, open: lootEditing === d.item_id }]">
+          <div class="ss-loot-line">
+            <span class="dash-icon"><img :src="getIcon(d.item_id)" alt="" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" /></span>
+            <span class="name">
+              <span>{{ d.item_name }}</span>
+              <small>{{ d.type ? `${d.type} · ` : '' }}x{{ d.qty }} @ {{ fmtPrice(d.shownUnit) }}{{ d.mixed ? ' on average' : '' }}{{ d.maps ? ` · dropped in ${d.maps} ${d.maps === 1 ? 'map' : 'maps'}` : '' }}<template v-if="d.was !== undefined"> · <b>edited, was {{ fmtPrice(d.was) }}</b><template v-if="d.unchanged > 0"> · {{ d.unchanged }} at the recorded price</template></template></small>
+            </span>
+            <span class="bar"><span><i :style="{ width: d.bar + '%' }"></i></span><b class="mono">{{ d.share.toFixed(0) }}%</b></span>
+            <span :class="['mono', 'r', d.was !== undefined ? 'accent' : 'gold']">{{ fmtValue(d.value) }} FE</span>
+            <span class="act">
+              <button v-if="d.was !== undefined && lootScopeSession !== null" class="dash-btn small" title="Back to the recorded prices in this session" @click="revertLootPrice(d.item_id)">Revert</button>
+              <button
+                v-if="d.editable && (d.was === undefined || d.partial)"
+                class="pencil"
+                :aria-expanded="lootEditing === d.item_id"
+                :aria-label="`Edit the price of ${d.item_name} in this session`"
+                title="Edit the price in this session"
+                @click="lootEditing = d.item_id"
+              >
+                <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2.5l2.5 2.5L6 12.5l-3.2.7.7-3.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+              </button>
+            </span>
+          </div>
+          <PriceEditor
+            v-if="lootEditing === d.item_id && d.editable"
+            :unit="d.unit"
+            label="Price per item in this session"
+            :hint="`Applies to this item in ${d.stored === 1 ? 'the 1 finished map' : `all ${d.stored} finished maps`} of this session only. Other sessions and its price everywhere else don't change.${store.applyTax ? ' Enter the price after market tax, like the recorded one.' : ''}`"
+            :error="lootEditError"
+            @cancel="lootEditing = ''"
+            @apply="applyLootPrice(d.item_id, $event)"
+          />
         </div>
       </div>
     </div>
@@ -237,9 +278,12 @@ import { onClickOutside } from '@vueuse/core';
 import { useTrackerStore } from '../../stores/trackerStore';
 import { getIcon } from '../../utils/assets';
 import type { MapRecord, RecordDrop } from '../../types/history';
+import { priceGroup } from './categories';
 import { fmtDur, fmtFE, fmtFull, fmtPrice, fmtTime, fmtValue, fmtWhen } from './format';
 import MapItemRow from './MapItemRow.vue';
+import PriceEditor from './PriceEditor.vue';
 import SortHead from './SortHead.vue';
+import { itemInfo } from './strategies/api';
 import { sortedBy, useSort } from './useSort';
 
 const props = defineProps<{ focusMapId: string }>();
@@ -555,9 +599,170 @@ const scopeLoot = computed(() => {
   const total = list.reduce((a, d) => a + d.value, 0) || 1;
   const top = list[0]?.value || 1;
   const by = lootSort.key.value;
+  const stored = storedLoot.value;
+  const session = lootScopeSession.value;
   return sortedBy(list, d => (by === 'name' ? d.item_name : d.value), lootSort.dir.value)
-    .map(d => ({ ...d, share: (d.value / total) * 100, bar: (d.value / top) * 100 }));
+    .map(d => {
+      const s = stored.get(d.item_id);
+      const type = lootItemTypes.value.get(d.item_id);
+      return {
+        ...d,
+        share: (d.value / total) * 100,
+        bar: (d.value / top) * 100,
+        type: type ?? '',
+        // Unknown items have an empty type and no group; they show under All.
+        group: type ? priceGroup(type) : '',
+        stored: s?.maps ?? 0,
+        // What the finished maps hold: the editor starts from this, not from drops of the running map.
+        unit: s && s.qty > 0 ? s.value / s.qty : 0,
+        was: s?.edited ? s.editedOriginal / s.editedQty : undefined,
+        // An edited row shows the price that was set. Other drops of the item keep their recorded
+        // price (a map finished later, the running map, past the 80 a map keeps), so an average over
+        // all of them would show a price nobody entered. Maps edited to different prices are an average.
+        shownUnit: s?.edited ? (s.samePrice ? s.editedValue / s.editedQty : s.value / s.qty) : d.value / (d.qty || 1),
+        mixed: !!s?.edited && !s.samePrice,
+        unchanged: s?.edited ? Math.max(0, d.qty - s.editedQty) : 0,
+        // Not every drop holds one set price, so the pencil stays to set it again for all of them.
+        partial: !!s?.edited && (!s.samePrice || s.editedQty < s.qty),
+        editable: session !== null && !!s && s.qty > 0,
+      };
+    });
 });
+
+// The session a price in the Loot view would change. All time spans several, so it has none.
+const lootScopeSession = computed(() => {
+  if (scope.value === 'all') return null;
+  return scope.value === 'current' ? store.sessionId : scope.value;
+});
+
+// The drops of the finished maps in the selection, per item. Only these can be repriced.
+const storedLoot = computed(() => {
+  const byId = new Map<string, {
+    qty: number; value: number; maps: number; edited: boolean;
+    editedQty: number; editedValue: number; editedOriginal: number; editedPrice: number; samePrice: boolean;
+  }>();
+  rows.value.filter(r => !r.live).forEach(r => r.drops.forEach(d => {
+    const cur = byId.get(d.item_id) ?? {
+      qty: 0, value: 0, maps: 0, edited: false, editedQty: 0, editedValue: 0, editedOriginal: 0, editedPrice: 0, samePrice: true,
+    };
+    cur.qty += d.qty;
+    cur.value += d.price * d.qty;
+    cur.maps += 1;
+    if (d.originalPrice !== undefined) {
+      if (cur.edited && d.price !== cur.editedPrice) cur.samePrice = false;
+      cur.edited = true;
+      cur.editedPrice = d.price;
+      cur.editedQty += d.qty;
+      cur.editedValue += d.price * d.qty;
+      cur.editedOriginal += d.originalPrice * d.qty;
+    }
+    byId.set(d.item_id, cur);
+  }));
+  return byId;
+});
+
+const lootEditCount = computed(() => {
+  if (lootScopeSession.value === null) return 0;
+  let n = 0;
+  storedLoot.value.forEach(s => { if (s.edited) n += 1; });
+  return n;
+});
+
+const lootSummary = computed(() => {
+  const items = scopeLoot.value.reduce((a, d) => a + d.value, 0);
+  const current = scope.value === 'current';
+  const earned = current ? store.totalProfit : rows.value.reduce((a, r) => a + r.profit, 0);
+  // Stored maps keep only their most valuable drops, so outside the current session the rows can't
+  // give the full total. It comes from the exact profit and expenses instead.
+  const spent = current ? Math.max(0, items - earned) : rows.value.reduce((a, r) => a + r.expenseValue, 0);
+  const dropped = current ? items : earned + spent;
+  return [
+    { label: 'Dropped', value: fmtValue(dropped), tone: 'gold' },
+    { label: 'Spent', value: spent > 0 ? '−' + fmtValue(spent) : '0', tone: spent > 0 ? 'neg' : '' },
+    { label: 'Earned', value: fmtFE(earned), tone: earned >= 0 ? 'pos' : 'neg' },
+    { label: 'Item types', value: String(scopeLoot.value.length), tone: '' },
+  ];
+});
+
+// Item types come from the tracker's own tables; without them the list simply has no chips.
+const lootItemTypes = ref(new Map<string, string>());
+const lootIds = computed(() => (view.value === 'loot' ? [...new Set(rawLootIds())].sort().join(',') : ''));
+
+function rawLootIds(): string[] {
+  const ids = rows.value.flatMap(r => r.drops.map(d => d.item_id));
+  return scope.value === 'current' ? ids.concat(store.sessionDrops.map(d => d.item_id)) : ids;
+}
+
+watch(lootIds, async (joined) => {
+  const known = lootItemTypes.value;
+  const missing = joined ? joined.split(',').filter(id => !known.has(id)) : [];
+  if (missing.length === 0) return;
+  try {
+    const info = await itemInfo(missing);
+    const next = new Map(lootItemTypes.value);
+    missing.forEach(id => {
+      const type = info.get(id)?.item_type;
+      if (type !== undefined) next.set(id, type);
+    });
+    lootItemTypes.value = next;
+  } catch {
+    // Logged by itemInfo. The chips stay away and the next change of the list asks again.
+  }
+}, { immediate: true });
+
+const lootGroup = ref('all');
+const lootType = ref('all');
+
+function countBy(values: string[]): Array<{ id: string; n: number }> {
+  const counts = new Map<string, number>();
+  values.filter(Boolean).forEach(v => counts.set(v, (counts.get(v) ?? 0) + 1));
+  return [...counts].map(([id, n]) => ({ id, n })).sort((a, b) => b.n - a.n || a.id.localeCompare(b.id));
+}
+
+function pickLootGroup(group: string) {
+  lootGroup.value = group;
+  lootType.value = 'all';
+}
+
+const lootGroups = computed(() => countBy(scopeLoot.value.map(d => d.group)));
+const inLootGroup = computed(() => scopeLoot.value.filter(d => lootGroup.value === 'all' || d.group === lootGroup.value));
+const lootTypes = computed(() => countBy(inLootGroup.value.map(d => d.type)));
+const shownLoot = computed(() => inLootGroup.value.filter(d => lootType.value === 'all' || d.type === lootType.value));
+
+// Another session can have none of the picked group or type. With one group left its chips are
+// hidden too, so a filter must not stay on where it can't be cleared.
+watch([lootGroups, lootTypes], () => {
+  const groupGone = !lootGroups.value.some(g => g.id === lootGroup.value);
+  if (lootGroup.value !== 'all' && (groupGone || lootGroups.value.length <= 1)) pickLootGroup('all');
+  else if (lootType.value !== 'all' && !lootTypes.value.some(t => t.id === lootType.value)) lootType.value = 'all';
+});
+
+const lootEditing = ref('');
+const lootEditError = ref('');
+watch(lootEditing, () => { lootEditError.value = ''; });
+watch([scope, view], () => { lootEditing.value = ''; });
+
+function applyLootPrice(itemId: string, price: number) {
+  const session = lootScopeSession.value;
+  if (session === null || !store.setSessionItemPrice(session, itemId, price)) {
+    lootEditError.value = 'That price is too high for this quantity.';
+    return;
+  }
+  lootEditing.value = '';
+}
+
+function revertLootPrice(itemId: string) {
+  const session = lootScopeSession.value;
+  if (session !== null) store.setSessionItemPrice(session, itemId, null);
+  lootEditing.value = '';
+}
+
+function revertLootAll() {
+  const session = lootScopeSession.value;
+  if (session === null) return;
+  storedLoot.value.forEach((s, id) => { if (s.edited) store.setSessionItemPrice(session, id, null); });
+  lootEditing.value = '';
+}
 
 interface ChartPoint { x: number; y: number; t: number; v: number }
 
@@ -663,13 +868,26 @@ function onChartMove(e: MouseEvent) {
 .ss-sec .chev.shut { transform: rotate(-90deg); }
 .ss-sec .total { margin-left: auto; font-size: 11px; font-weight: 700; }
 .ss-loot-line .name { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: var(--strong); }
+.ss-loot-line .name span, .ss-loot-line .name small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ss-loot-line .name small { font-size: 10px; font-weight: 400; color: var(--label); }
+.ss-loot-line .name b { font-weight: 600; color: var(--accent-text); }
 
 .ss-lootview { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.ss-loot-head, .ss-loot-line { display: grid; grid-template-columns: 30px minmax(0, 1fr) 160px 90px; gap: 12px; align-items: center; }
+.ss-loot-tools { display: flex; flex-direction: column; gap: 6px; padding: 10px 18px 0; }
+.ss-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ss-loot-note { font-size: 11px; color: var(--label); }
+.ss-loot-head, .ss-loot-line { display: grid; grid-template-columns: 30px minmax(0, 1fr) 150px 90px 88px; gap: 12px; align-items: center; }
 .ss-loot-head { padding: 8px 30px 4px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--label); }
 .ss-loot-list { flex: 1; min-height: 0; padding: 0 18px 14px; display: flex; flex-direction: column; gap: 4px; }
-.ss-loot-line { flex-shrink: 0; padding: 6px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--panel-border); }
+.ss-loot-item { flex-shrink: 0; border-radius: 10px; overflow: hidden; background: var(--panel); border: 1px solid var(--panel-border); }
+.ss-loot-item.edited, .ss-loot-item.open { border-color: var(--accent-border); }
+.ss-loot-line { padding: 6px 12px; }
+.ss-loot-line .accent { color: var(--accent-text); }
+.ss-loot-line .act { display: flex; justify-content: flex-end; gap: 4px; }
+.ss-loot-line .act .dash-btn { align-self: center; }
+.pencil { flex-shrink: 0; width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; background: var(--chip); border: 1px solid var(--chip-border); color: var(--muted); }
+.pencil:hover { border-color: var(--accent-border); color: var(--strong); }
+.ss-summary .val.gold { color: var(--gold); }
 .ss-loot-line .bar { display: flex; align-items: center; gap: 8px; }
 .ss-loot-line .bar > span { flex: 1; height: 6px; border-radius: 3px; background: var(--chip-border); overflow: hidden; }
 .ss-loot-line .bar i { display: block; height: 100%; background: var(--gold); }

@@ -20,24 +20,24 @@
         <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2.5l2.5 2.5L6 12.5l-3.2.7.7-3.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
       </button>
     </div>
-    <form v-if="editing" class="mi-edit" @submit.prevent="apply" @keydown.esc.stop="$emit('cancel')">
-      <label class="fld">Price
-        <input ref="input" v-model="text" class="mono" type="text" inputmode="decimal" maxlength="12" aria-label="Price per item for this map" @focus="($event.target as HTMLInputElement).select()" /> FE each
-      </label>
-      <span class="hint">Only this map. The item's price everywhere else doesn't change.{{ afterTax ? ' Enter the price after market tax, like the recorded one.' : '' }}</span>
-      <button class="dash-btn small primary push" type="submit">Apply</button>
-      <button class="dash-btn small" type="button" @click="$emit('cancel')">Cancel</button>
-      <span v-if="ownError || error" class="err" role="alert">{{ ownError || error }}</span>
-    </form>
+    <PriceEditor
+      v-if="editing"
+      :unit="unit"
+      label="Price per item for this map"
+      :hint="`Only this map. The item's price everywhere else doesn't change.${afterTax ? ' Enter the price after market tax, like the recorded one.' : ''}`"
+      :error="error"
+      @cancel="$emit('cancel')"
+      @apply="$emit('apply', $event)"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue';
 import { getIcon } from '../../utils/assets';
-import { fmtPrice, parseDecimal } from './format';
+import { fmtPrice } from './format';
+import PriceEditor from './PriceEditor.vue';
 
-const props = defineProps<{
+defineProps<{
   itemId: string;
   name: string;
   detail: string;
@@ -52,40 +52,7 @@ const props = defineProps<{
   afterTax?: boolean;
   error?: string;
 }>();
-const emit = defineEmits<{ edit: []; revert: []; cancel: []; apply: [price: number] }>();
-
-const MAX_PRICE = 10_000_000;
-const text = ref('');
-const ownError = ref('');
-const input = ref<HTMLInputElement | null>(null);
-
-const shown = (unit: number) => String(Math.round(unit * 1000) / 1000);
-
-watch(() => props.editing, (open) => {
-  if (!open) return;
-  text.value = shown(props.unit);
-  ownError.value = '';
-  void nextTick(() => input.value?.focus());
-}, { immediate: true });
-
-function apply() {
-  // Left as it was opened: nothing to change, and the field holds a rounded value.
-  if (text.value.trim() === shown(props.unit)) {
-    emit('cancel');
-    return;
-  }
-  const price = parseDecimal(text.value);
-  if (price === null || price <= 0) {
-    ownError.value = 'Enter a price above 0, like 1500 or 1.5.';
-    return;
-  }
-  if (price > MAX_PRICE) {
-    ownError.value = 'The price can be at most 10,000,000.';
-    return;
-  }
-  ownError.value = '';
-  emit('apply', price);
-}
+defineEmits<{ edit: []; revert: []; cancel: []; apply: [price: number] }>();
 </script>
 
 <style scoped>
@@ -102,11 +69,4 @@ function apply() {
 .mi-row .act { position: relative; align-self: center; flex-shrink: 0; }
 .pencil { position: relative; flex-shrink: 0; width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; background: var(--chip); border: 1px solid var(--chip-border); color: var(--muted); }
 .pencil:hover { border-color: var(--accent-border); color: var(--strong); }
-.mi-edit { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px 8px 54px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); }
-.mi-edit .fld { display: flex; align-items: center; gap: 6px; }
-.mi-edit input { box-sizing: border-box; width: 72px; padding: 3px 7px; border-radius: 6px; font-size: 12px; font-weight: 600; text-align: right; outline: none; color: var(--strong); background: var(--input); border: 1px solid var(--accent-border); }
-.mi-edit .hint { font-size: 10px; color: var(--label); }
-.mi-edit .push { margin-left: auto; }
-.mi-edit .dash-btn { align-self: center; }
-.mi-edit .err { flex-basis: 100%; font-weight: 600; color: var(--neg); }
 </style>

@@ -526,6 +526,45 @@ export const useTrackerStore = defineStore('tracker', {
       return true;
     },
 
+    // Sets what one dropped item was worth in every finished map of one session, or with null goes
+    // back to the recorded values. Replaces edits of that item in those maps. Other sessions and the
+    // item's price stay as they are. All maps change or none do.
+    setSessionItemPrice(sessionId: string, itemId: string, price: number | null): boolean {
+      if (price !== null && !(Number.isFinite(price) && price > 0 && price <= MAX_MAP_ITEM_PRICE)) return false;
+      const inCurrent = sessionId === this.sessionId;
+      const archived = inCurrent ? undefined : this.archivedSessions.find(s => s.id === sessionId);
+      if (!inCurrent && !archived) return false;
+      const changes = this.mapHistory.flatMap(map => {
+        const drop = map.sessionId === sessionId ? map.drops.find(d => d.item_id === itemId) : undefined;
+        if (!drop) return [];
+        const next = price ?? drop.originalPrice ?? drop.price;
+        return [{ map, drop, next, delta: (next - drop.price) * drop.qty }];
+      });
+      if (changes.length === 0) return false;
+      const total = changes.reduce((a, c) => a + c.delta, 0);
+      const fits = (...values: number[]) => values.every(v => Math.abs(v) <= MAX_SAVED_VALUE);
+      const sessionProfit = inCurrent ? this.totalProfit : archived?.profit ?? 0;
+      if (!fits(sessionProfit + total)) return false;
+      if (!changes.every(c => fits(c.next * c.drop.qty, c.map.lootValue + c.delta, c.map.profit + c.delta))) return false;
+      for (const { map, drop, next, delta } of changes) {
+        if (price === null) delete drop.originalPrice;
+        else if (drop.originalPrice === undefined) drop.originalPrice = drop.price;
+        drop.price = next;
+        map.lootValue = Math.max(0, map.lootValue + delta);
+        map.profit += delta;
+      }
+      if (inCurrent) {
+        this.totalProfit += total;
+        const s = this.sessionDrops.find(x => x.item_id === itemId);
+        if (s && s.qty > 0) s.price = Math.max(0, (s.price * s.qty + total) / s.qty);
+      } else if (archived) {
+        archived.profit += total;
+      }
+      this.stateDirty = true;
+      void this.saveStateToDisk();
+      return true;
+    },
+
     // Removes saved sessions and their maps (linked by MapRecord.sessionId). The current session is never touched.
     deleteSessions(ids: string[]) {
       const drop = new Set(ids.filter(id => id !== this.sessionId));
