@@ -42,10 +42,6 @@ export interface InventorySnapshotItem {
   price:     number;
 }
 
-const MAX_MAP_ITEM_PRICE = 1e7;
-// The loader (stateSanitize) clamps item totals and map values to this.
-const MAX_SAVED_VALUE = 1e9;
-
 export interface LootItem {
   item_id: string;
   item_name: string;
@@ -61,6 +57,10 @@ export interface ExpenseItem {
   total: number;
   timestamp: number;
 }
+
+const MAX_MAP_ITEM_PRICE = 1e7;
+// The loader (stateSanitize) clamps item totals and map values to this.
+const MAX_SAVED_VALUE = 1e9;
 
 export const useTrackerStore = defineStore('tracker', {
   state: () => ({
