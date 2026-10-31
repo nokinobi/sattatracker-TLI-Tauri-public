@@ -458,7 +458,7 @@ function rowStyle(id: string) {
 // session can reach millions).
 function fmtAmount(n: number): string {
   const a = Math.abs(n);
-  if (a >= 999_500) return (a / 1e6).toFixed(a >= 9_999_500 ? 0 : 1) + 'M';
+  if (a >= 999_500) return (a / 1e6).toFixed(a >= 9_950_000 ? 0 : 1) + 'M';
   if (a >= 99_999.5) return Math.round(a / 1e3) + 'k';
   if (a >= 999.95) return String(Math.round(a));
   return a.toFixed(1);
