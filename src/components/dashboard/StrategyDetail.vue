@@ -68,7 +68,7 @@
       </label>
     </div>
 
-    <div v-if="!detail" class="dash-empty">{{ !failed ? 'Loading strategy…' : fav ? "The server has no details for this strategy any more (it may be from an older period or season). Your note and the numbers saved with it are kept." : "Couldn't load this strategy. Try again in a minute." }}</div>
+    <div v-if="!detail" class="dash-empty">{{ pricesFailed ? "Couldn't load this strategy's item prices. Try again in a minute." : !failed ? 'Loading strategy…' : fav ? "The server has no details for this strategy any more (it may be from an older period or season). Your note and the numbers saved with it are kept." : "Couldn't load this strategy. Try again in a minute." }}</div>
     <div v-else-if="view === 'talents'" class="sd-trees dash-scroll">
       <TalentTrees :talents="detail.talents" />
     </div>
@@ -185,6 +185,7 @@ const RARE_MIN_VALUE = 0.5;
 
 const detail = ref<DetailData | null>(null);
 const failed = ref(false);
+const pricesFailed = ref(false);
 const info = ref(new Map<string, ItemInfo>());
 const allLoot = ref(false);
 const lootView = ref<'all' | 'rare' | 'excluded'>('all');
@@ -222,8 +223,14 @@ onMounted(async () => {
     failed.value = true;
     return;
   }
-  info.value = new Map(await itemInfo([...d.items.cost, ...d.items.loot].map(i => i.id)));
-  detail.value = d;
+  try {
+    info.value = new Map(await itemInfo([...d.items.cost, ...d.items.loot].map(i => i.id)));
+    detail.value = d;
+  } catch (e) {
+    // Without prices the profit would read as a false 0, so the details aren't shown.
+    console.warn('Could not load item prices', e);
+    pricesFailed.value = true;
+  }
 });
 
 const title = computed(() => treeList(props.row.talentLabel) || 'No main talent');

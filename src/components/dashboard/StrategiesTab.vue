@@ -370,6 +370,7 @@ function filterQuery(): Query {
 }
 
 let generation = 0;
+let unmounted = false;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 const retrying = ref(false);
 const query = computed(() => JSON.stringify([stage.value, timemark.value, sort.value, minCount.value, picks, mechPicks, page.value]));
@@ -635,9 +636,13 @@ onMounted(async () => {
   }
   // First time this run: a restored period and page are kept, so load them directly; a
   // changed period goes through the filter watcher (which starts again at page 1).
-  if (await loadStages()) void load();
+  if (await loadStages() && !unmounted) void load();
 });
 onUnmounted(() => {
+  // A load still running drops out instead of starting a retry for a tab that's gone, and one
+  // still waiting on the period list doesn't start.
+  unmounted = true;
+  generation++;
   if (ticker) clearInterval(ticker);
   if (debounce) clearTimeout(debounce);
   if (retryTimer) clearTimeout(retryTimer);

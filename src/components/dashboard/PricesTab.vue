@@ -81,7 +81,7 @@
             <button v-if="p.manual" class="dash-btn small act danger" :aria-label="`Reset the price of ${p.item_name}`" @click="resetOverride(p.item_id)">Reset</button>
             <button v-else-if="!p.blocked" class="dash-btn small act" :aria-expanded="editing === p.item_id" :aria-label="`Set a price for ${p.item_name}`" @click="openEditor(p)">Set price</button>
           </div>
-          <form v-if="editing === p.item_id" class="pr-edit" @submit.prevent="applyOverride(p.item_id)" @keydown.esc="editing = null">
+          <form v-if="editing === p.item_id" class="pr-edit" @submit.prevent="applyOverride(p.item_id)" @keydown.esc.stop="editing = null">
             <label class="fld">Price
               <input ref="priceInput" v-model="editPrice" class="pr-num mono big" type="text" inputmode="decimal" maxlength="12" aria-label="Manual price in FE" @focus="($event.target as HTMLInputElement).select()" /> FE
             </label>
