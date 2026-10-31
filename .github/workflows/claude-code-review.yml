@@ -98,15 +98,17 @@ jobs:
 
             Step 3: for the problems from steps 1 and 2 together:
             a. Read the review comments already on this pull request with
-               `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments`.
+               `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments`
+               and check each one against the code in this commit. A comment whose problem is gone
+               no longer counts, whatever line or commit GitHub still shows it on.
             b. For every problem not already commented on, post ONE inline comment on the exact line
                with mcp__github_inline_comment__create_inline_comment (path and line in the new
                version of the file). Say what is wrong, when it goes wrong, and how to fix it in two
                or three sentences. Skip pure formatting and naming taste. Don't comment on lines the
                PR doesn't change unless the change breaks them.
             c. Answer with:
-               - blocking: true if any problem exists in this commit, including one commented on
-                 earlier that is still not fixed; otherwise false
+               - blocking: true only if a problem exists in the code of this commit, including one
+                 commented on earlier that you checked and found still not fixed; otherwise false
                - summary: one or two sentences - why it can or can't be released
                - checked: 4 to 8 short items naming what you verified, by rule, and how many
                  code-review plugin agents finished (e.g. "listeners removed on unmount")
