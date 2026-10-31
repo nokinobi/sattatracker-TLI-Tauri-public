@@ -6,7 +6,7 @@ use lazy_static::lazy_static;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
@@ -15,6 +15,9 @@ const MAX_CACHE_ENTRIES: usize = 300;
 const MAX_CACHE_BYTES: usize = 32 * 1024 * 1024;
 // Past this age an answer is no use even as a fallback when the server fails.
 const STALE_KEEP: Duration = Duration::from_secs(2 * 60 * 60);
+// A question that just failed isn't asked again at once, so requests waiting for the same answer
+// fail together. Shorter than the dashboard's automatic retry after 4 s, which still goes out.
+const FAIL_COOLDOWN: Duration = Duration::from_secs(3);
 // Mechanics are sent as all their talent node ids (~35 × 43 chars each), so allow several.
 const MAX_PARAM_LEN: usize = 8000;
 const LIST_TTL: Duration = Duration::from_secs(5 * 60);
@@ -71,6 +74,9 @@ fn make_room(cache: &mut HashMap<String, Entry>, key: &str, incoming: usize) {
 lazy_static! {
     static ref CACHE: Mutex<HashMap<String, Entry>> = Mutex::new(HashMap::new());
     static ref PREFERRED: Mutex<Option<String>> = Mutex::new(None);
+    // One request per question at a time; the others wait and use its answer.
+    static ref IN_FLIGHT: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>> = Mutex::new(HashMap::new());
+    static ref FAILED: Mutex<HashMap<String, (Instant, String)>> = Mutex::new(HashMap::new());
 }
 
 // Servers to try, the one that answered last first. A server can sit behind a bot check
@@ -285,6 +291,106 @@ fn fallback<'a>(cache: &'a HashMap<String, Entry>, key: &str) -> Option<&'a Entr
     cache.get(key).filter(|e| e.at.elapsed() < STALE_KEEP)
 }
 
+fn recent_failure(failed: &HashMap<String, (Instant, String)>, key: &str) -> Option<String> {
+    failed
+        .get(key)
+        .filter(|(at, _)| at.elapsed() < FAIL_COOLDOWN)
+        .map(|(_, err)| err.clone())
+}
+
+fn note_failure(failed: &mut HashMap<String, (Instant, String)>, key: &str, err: &str) {
+    failed.retain(|_, (at, _)| at.elapsed() < FAIL_COOLDOWN);
+    failed.insert(key.to_string(), (Instant::now(), err.to_string()));
+}
+
+type Turn = Arc<tokio::sync::Mutex<()>>;
+
+fn turn_for(slots: &mut HashMap<String, Turn>, key: &str) -> Turn {
+    slots.entry(key.to_string()).or_default().clone()
+}
+
+/// Gives up a caller's turn, and forgets the question once only the map still holds it. The turn is
+/// dropped under the map's lock, so the last of several callers always sees that it was the last.
+fn release_turn(slots: &mut HashMap<String, Turn>, key: &str, turn: Turn) {
+    drop(turn);
+    if slots.get(key).is_some_and(|t| Arc::strong_count(t) == 1) {
+        slots.remove(key);
+    }
+}
+
+fn cached_answer(key: &str, endpoint: &str, what: &str) -> Option<Value> {
+    let cache = CACHE.lock().unwrap();
+    let e = cache.get(key)?;
+    if e.at.elapsed() >= ttl(endpoint) {
+        return None;
+    }
+    crate::applog::info(
+        "strategy",
+        &format!("{}: from cache ({} s old)", what, e.at.elapsed().as_secs()),
+    );
+    Some(json!({ "data": e.body, "fetchedAt": chrono_ms() - e.at.elapsed().as_millis() as i64, "stale": false }))
+}
+
+/// What a failed question gets: the saved answer if there is a recent one, otherwise the error.
+fn failed_answer(key: &str, what: &str, err: String) -> Result<Value, String> {
+    let cache = CACHE.lock().unwrap();
+    match fallback(&cache, key) {
+        Some(e) => {
+            crate::applog::warn(
+                "strategy",
+                &format!(
+                    "{}: all servers failed ({}), showing the saved answer from {} s ago",
+                    what,
+                    err,
+                    e.at.elapsed().as_secs()
+                ),
+            );
+            Ok(json!({ "data": e.body, "fetchedAt": chrono_ms() - e.at.elapsed().as_millis() as i64, "stale": true }))
+        }
+        None => {
+            crate::applog::error("strategy", &format!("{}: all servers failed: {}", what, err));
+            Err(err)
+        }
+    }
+}
+
+async fn ask_server(
+    endpoint: &str,
+    params: &[(String, String)],
+    key: String,
+    what: &str,
+) -> Result<Value, String> {
+    // The request this one waited for may have brought the answer, or just failed.
+    if let Some(answer) = cached_answer(&key, endpoint, what) {
+        return Ok(answer);
+    }
+    let failed = recent_failure(&FAILED.lock().unwrap(), &key);
+    if let Some(err) = failed {
+        return failed_answer(&key, what, err);
+    }
+    match fetch(endpoint, params, what).await {
+        Ok(data) => {
+            FAILED.lock().unwrap().remove(&key);
+            let size = data.to_string().len();
+            let mut cache = CACHE.lock().unwrap();
+            make_room(&mut cache, &key, size);
+            cache.insert(
+                key,
+                Entry {
+                    at: Instant::now(),
+                    body: data.clone(),
+                    size,
+                },
+            );
+            Ok(json!({ "data": data, "fetchedAt": chrono_ms(), "stale": false }))
+        }
+        Err(err) => {
+            note_failure(&mut FAILED.lock().unwrap(), &key, &err);
+            failed_answer(&key, what, err)
+        }
+    }
+}
+
 /// GET one of the strategy endpoints. Returns `{ data, fetchedAt, stale }`;
 /// a stale copy is served when the server fails but an older answer is cached.
 #[tauri::command]
@@ -297,66 +403,27 @@ pub async fn strategy_api(
         e
     })?;
     let key = cache_key(&endpoint, &params);
-    let now_ms = chrono_ms();
     let what = describe(&endpoint, &params);
 
-    {
-        let cache = CACHE.lock().unwrap();
-        if let Some(e) = cache.get(&key) {
-            if e.at.elapsed() < ttl(&endpoint) {
-                crate::applog::info(
-                    "strategy",
-                    &format!("{}: from cache ({} s old)", what, e.at.elapsed().as_secs()),
-                );
-                return Ok(
-                    json!({ "data": e.body, "fetchedAt": now_ms - e.at.elapsed().as_millis() as i64, "stale": false }),
-                );
-            }
-        }
+    if let Some(answer) = cached_answer(&key, &endpoint, &what) {
+        return Ok(answer);
     }
 
-    match fetch(&endpoint, &params, &what).await {
-        Ok(data) => {
-            let size = data.to_string().len();
-            let mut cache = CACHE.lock().unwrap();
-            make_room(&mut cache, &key, size);
-            cache.insert(
-                key,
-                Entry {
-                    at: Instant::now(),
-                    body: data.clone(),
-                    size,
-                },
-            );
-            Ok(json!({ "data": data, "fetchedAt": now_ms, "stale": false }))
-        }
-        Err(err) => {
-            let cache = CACHE.lock().unwrap();
-            match fallback(&cache, &key) {
-                Some(e) => {
-                    crate::applog::warn(
-                        "strategy",
-                        &format!(
-                            "{}: all servers failed ({}), showing the saved answer from {} s ago",
-                            what,
-                            err,
-                            e.at.elapsed().as_secs()
-                        ),
-                    );
-                    Ok(
-                        json!({ "data": e.body, "fetchedAt": now_ms - e.at.elapsed().as_millis() as i64, "stale": true }),
-                    )
-                }
-                None => {
-                    crate::applog::error(
-                        "strategy",
-                        &format!("{}: all servers failed: {}", what, err),
-                    );
-                    Err(err)
-                }
-            }
-        }
-    }
+    let turn = turn_for(&mut IN_FLIGHT.lock().unwrap(), &key);
+    let answer = {
+        let _waited = turn.lock().await;
+        ask_server(&endpoint, &params, key.clone(), &what).await
+    };
+    release_turn(&mut IN_FLIGHT.lock().unwrap(), &key, turn);
+    answer
+}
+
+/// The ids `get_item_info` looks up: real item ids only, up to its limit.
+fn lookup_ids(ids: Vec<String>) -> Vec<String> {
+    ids.into_iter()
+        .filter(|id| crate::pricing::valid_item_id(id))
+        .take(2000)
+        .collect()
 }
 
 #[derive(serde::Serialize)]
@@ -369,8 +436,8 @@ pub struct ItemInfo {
 /// Names, types and today's prices for item IDs found in strategy data.
 #[tauri::command]
 pub fn get_item_info(ids: Vec<String>) -> HashMap<String, ItemInfo> {
-    ids.into_iter()
-        .take(2000)
+    lookup_ids(ids)
+        .into_iter()
         .map(|id| {
             let info = ItemInfo {
                 name: crate::db::DbManager::get_item_name(&id),
@@ -450,6 +517,45 @@ mod tests {
         assert!(fallback(&c, "old").is_none());
         assert!(fallback(&c, "recent").is_some());
         assert!(fallback(&c, "missing").is_none());
+    }
+
+    #[test]
+    fn a_failed_question_rests_only_for_the_cooldown() {
+        let mut f = HashMap::new();
+        assert!(recent_failure(&f, "k").is_none());
+        note_failure(&mut f, "k", "down");
+        assert_eq!(recent_failure(&f, "k").as_deref(), Some("down"));
+        f.insert(
+            "k".to_string(),
+            (Instant::now() - FAIL_COOLDOWN - Duration::from_secs(1), "down".to_string()),
+        );
+        assert!(recent_failure(&f, "k").is_none());
+        note_failure(&mut f, "other", "down");
+        assert!(!f.contains_key("k"));
+    }
+
+    #[test]
+    fn a_question_shares_one_turn_until_nobody_waits() {
+        let mut slots = HashMap::new();
+        let first = turn_for(&mut slots, "k");
+        let second = turn_for(&mut slots, "k");
+        assert!(Arc::ptr_eq(&first, &second));
+        release_turn(&mut slots, "k", first);
+        assert!(slots.contains_key("k"));
+        release_turn(&mut slots, "k", second);
+        assert!(!slots.contains_key("k"));
+    }
+
+    #[test]
+    fn item_lookups_take_only_item_ids() {
+        let ids = vec![
+            "100300".to_string(),
+            String::new(),
+            "../x".to_string(),
+            "1".repeat(13),
+        ];
+        assert_eq!(lookup_ids(ids), vec!["100300".to_string()]);
+        assert_eq!(lookup_ids(vec!["1".to_string(); 2001]).len(), 2000);
     }
 
     #[test]

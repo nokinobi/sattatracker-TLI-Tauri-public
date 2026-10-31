@@ -102,7 +102,12 @@ pub fn listed_prices(
 fn parse_overrides(text: &str, now: i64) -> HashMap<String, PriceOverride> {
     let raw: HashMap<String, PriceOverride> = serde_json::from_str(text).unwrap_or_default();
     raw.into_iter()
-        .filter(|(id, o)| valid_item_id(id) && valid_override_price(o.price) && o.until_ms > now)
+        .filter(|(id, o)| {
+            valid_item_id(id)
+                && valid_override_price(o.price)
+                && o.until_ms > now
+                && o.until_ms <= now.saturating_add(MAX_OVERRIDE_MINUTES as i64 * 60_000)
+        })
         .take(MAX_OVERRIDES)
         .collect()
 }
@@ -416,7 +421,7 @@ const MAX_TABLE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_TABLE_ENTRIES: usize = 20_000;
 const MAX_PRICE: f64 = 10_000_000.0;
 
-fn valid_item_id(id: &str) -> bool {
+pub(crate) fn valid_item_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= 12 && id.bytes().all(|b| b.is_ascii_digit())
 }
 
@@ -549,6 +554,20 @@ mod tests {
         set_override(id, 100.0, 30).unwrap();
         clear_override(id);
         assert_eq!(manager().get_price_sync(id), 9.0);
+    }
+
+    #[test]
+    fn saved_override_cant_outlast_the_limit() {
+        let longest = MAX_OVERRIDE_MINUTES as i64 * 60_000;
+        let text = format!(
+            r#"{{"11": {{"price": 5.0, "until_ms": {}}}, "12": {{"price": 5.0, "until_ms": {}}}, "13": {{"price": 5.0, "until_ms": {}}}}}"#,
+            1000 + longest,
+            1001 + longest,
+            i64::MAX
+        );
+        let loaded = parse_overrides(&text, 1000);
+        assert!(loaded.contains_key("11"));
+        assert_eq!(loaded.len(), 1);
     }
 
     #[test]
