@@ -230,7 +230,7 @@
         <div v-if="error && !board && !retrying" class="dash-empty">
           <div>
             <div>Couldn't load strategies: {{ error }}</div>
-            <button class="dash-btn small retry" @click="load()">Try again</button>
+            <button class="dash-btn small retry" @click="tryAgain">Try again</button>
           </div>
         </div>
         <div v-else-if="!board" class="dash-empty">Loading strategies…</div>
@@ -430,8 +430,21 @@ async function load(opts: { boardOnly?: boolean } = {}) {
   }
 }
 
+// Try again after a failed first load: the period list may be what failed. A period picked here
+// starts its own load through the filter watcher.
+async function tryAgain() {
+  const before = stage.value;
+  if (!stages.value.length) {
+    await loadStages();
+    // Still no list: the error stays on screen, and the failing server gets no more requests.
+    if (!stages.value.length) return;
+  }
+  if (!unmounted && stage.value && stage.value === before) void load();
+}
+
 // Keeps a period restored from the last run while the server still offers it.
 async function loadStages(): Promise<boolean> {
+  error.value = '';
   try {
     const r = await strategyApi<StageOptions>('stage-options');
     stages.value = r.data.options.map(o => o.value);

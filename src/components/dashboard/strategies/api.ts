@@ -78,14 +78,16 @@ export function fetchDetail(stage: string, strategyKey: string): Promise<DetailD
 
 const itemCache = new Map<string, ItemInfo>();
 
+// Always asks again: the prices in the answer change with refreshes and manual prices, and the
+// question only goes to the tracker's own tables, not the server.
 export async function itemInfo(ids: string[]): Promise<Map<string, ItemInfo>> {
-  const missing = [...new Set(ids)].filter(id => !itemCache.has(id));
-  if (missing.length) {
+  const wanted = [...new Set(ids)];
+  if (wanted.length) {
     try {
-      const got = await invoke<Record<string, ItemInfo>>('get_item_info', { ids: missing });
+      const got = await invoke<Record<string, ItemInfo>>('get_item_info', { ids: wanted });
       Object.entries(got).forEach(([id, info]) => itemCache.set(id, info));
     } catch (e) {
-      logEvent('error', `item names for ${missing.length} items failed: ${String(e)}`);
+      logEvent('error', `item names for ${wanted.length} items failed: ${String(e)}`);
       throw e;
     }
   }
