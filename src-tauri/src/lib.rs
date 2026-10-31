@@ -68,7 +68,10 @@ struct PriceEntry {
     item_id: String,
     item_name: String,
     item_type: String,
+    /// What the tracker uses now: the manual price while one is running.
     price: f64,
+    market_price: f64,
+    override_until_ms: Option<i64>,
 }
 
 #[derive(serde::Serialize)]
@@ -87,17 +90,21 @@ fn get_price_status() -> PriceStatus {
 
 #[tauri::command]
 fn get_all_prices() -> Vec<PriceEntry> {
+    let overrides = crate::pricing::active_overrides();
     let mut entries: Vec<PriceEntry> = crate::pricing::get_all_cached_prices()
         .into_iter()
-        .filter(|(_, p)| *p > 0.0)
-        .map(|(id, price)| {
+        .filter(|(id, p)| *p > 0.0 || overrides.contains_key(id))
+        .map(|(id, market_price)| {
             let item_name = crate::db::DbManager::get_item_name(&id);
             let item_type = crate::db::DbManager::get_item_type(&id);
+            let manual = overrides.get(&id);
             PriceEntry {
+                price: manual.map_or(market_price, |o| o.price),
+                override_until_ms: manual.map(|o| o.until_ms),
                 item_id: id,
                 item_name,
                 item_type,
-                price,
+                market_price,
             }
         })
         .collect();
@@ -107,6 +114,28 @@ fn get_all_prices() -> Vec<PriceEntry> {
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     entries
+}
+
+#[tauri::command]
+fn set_price_override(
+    window: tauri::Window,
+    item_id: String,
+    price: f64,
+    minutes: u32,
+) -> Result<i64, String> {
+    if window.label() != "main" {
+        return Err("forbidden".to_string());
+    }
+    crate::pricing::set_override(&item_id, price, minutes)
+}
+
+#[tauri::command]
+fn clear_price_override(window: tauri::Window, item_id: String) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("forbidden".to_string());
+    }
+    crate::pricing::clear_override(&item_id);
+    Ok(())
 }
 
 #[tauri::command]
@@ -166,6 +195,9 @@ pub fn run() {
 
             if let Ok(dir) = app.path().app_local_data_dir() {
                 applog::init(dir.join("logs"), &app.package_info().version.to_string());
+                if std::fs::create_dir_all(&dir).is_ok() {
+                    pricing::init_overrides(dir.join("price_overrides.json"));
+                }
             }
             use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
@@ -246,6 +278,8 @@ pub fn run() {
             get_cursor_position,
             get_all_prices,
             get_price_status,
+            set_price_override,
+            clear_price_override,
             state_store::save_state,
             state_store::load_state,
             strategy::strategy_api,
