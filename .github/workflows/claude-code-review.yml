@@ -39,6 +39,9 @@ jobs:
 
       - id: claude
         uses: anthropics/claude-code-action@v1
+        env:
+          # The review must wait for the plugin's agents; run in the background, it answers without them.
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Merges by claude-decision push to release branches as github-actions[bot]; without
@@ -62,8 +65,10 @@ jobs:
             without --comment, so it reports its validated issues back to you. Follow its steps as
             written and launch its agents with the Agent tool on every pull request, however small;
             reading the diff yourself does not replace them. Only ignore its checks that stop on
-            "already commented", "automated" or "trivial". If an agent can't be launched, go on to
-            step 2 and say exactly why in `checked`.
+            "already commented", "automated" or "trivial". Wait for every agent to finish and use
+            its result before you go on: never answer while one is still running. If its review
+            agents can't run or finish, answer blocking: true and say exactly why in `summary`, so
+            the pull request can't merge on an incomplete review.
 
             Step 2: check every changed file against these rules, reading the code around each
             change (callers, types, templates, the store or command it talks to):
@@ -104,7 +109,7 @@ jobs:
                  earlier that is still not fixed; otherwise false
                - summary: one or two sentences - why it can or can't be released
                - checked: 4 to 8 short items naming what you verified, by rule, and how many
-                 code-review plugin agents ran (e.g. "listeners removed on unmount")
+                 code-review plugin agents finished (e.g. "listeners removed on unmount")
           claude_args: >-
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Skill,Agent,Task,TodoWrite,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Read,Grep,Glob"
             --json-schema '{"type":"object","properties":{"blocking":{"type":"boolean"},"summary":{"type":"string"},"checked":{"type":"array","items":{"type":"string"}}},"required":["blocking","summary","checked"]}'
