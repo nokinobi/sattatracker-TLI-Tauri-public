@@ -26,6 +26,13 @@ export function fmtPrice(p: number): string {
   return p.toFixed(3);
 }
 
+// Length of a list of durations, in minutes.
+export function totalMinutes(list: number[]): number {
+  let sum = 0;
+  for (let i = 0; i <= list.length; i++) sum += list[i];
+  return sum / 60000;
+}
+
 export function fmtTime(ms: number): string {
   return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
