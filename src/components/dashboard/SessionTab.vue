@@ -645,11 +645,13 @@ const lootEditCount = computed(() => {
 });
 
 const lootSummary = computed(() => {
-  const dropped = scopeLoot.value.reduce((a, d) => a + d.value, 0);
+  const items = scopeLoot.value.reduce((a, d) => a + d.value, 0);
   const current = scope.value === 'current';
   const earned = current ? store.totalProfit : rows.value.reduce((a, r) => a + r.profit, 0);
-  // Stored maps keep only their most valuable drops, so outside the current session the expenses are the exact figure.
-  const spent = current ? Math.max(0, dropped - earned) : rows.value.reduce((a, r) => a + r.expenseValue, 0);
+  // Stored maps keep only their most valuable drops, so outside the current session the rows can't
+  // give the full total. It comes from the exact profit and expenses instead.
+  const spent = current ? Math.max(0, items - earned) : rows.value.reduce((a, r) => a + r.expenseValue, 0);
+  const dropped = current ? items : earned + spent;
   return [
     { label: 'Dropped', value: fmtValue(dropped), tone: 'gold' },
     { label: 'Spent', value: spent > 0 ? '−' + fmtValue(spent) : '0', tone: spent > 0 ? 'neg' : '' },
