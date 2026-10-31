@@ -435,7 +435,7 @@ async function load(opts: { boardOnly?: boolean } = {}) {
 async function tryAgain() {
   const before = stage.value;
   if (!stages.value.length) await loadStages();
-  if (stage.value && stage.value === before) void load();
+  if (!unmounted && stage.value && stage.value === before) void load();
 }
 
 // Keeps a period restored from the last run while the server still offers it.
