@@ -225,11 +225,17 @@ async function resetOverride(itemId: string) {
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
+let ticker: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
   void load();
   timer = setInterval(load, 60_000);
+  // Keeps "N min left" moving and ends a manual price on time between price reloads.
+  ticker = setInterval(() => { now.value = Date.now(); }, 15_000);
 });
-onUnmounted(() => { if (timer) clearInterval(timer); });
+onUnmounted(() => {
+  if (timer) clearInterval(timer);
+  if (ticker) clearInterval(ticker);
+});
 
 const owned = computed(() => {
   const m = new Map<string, number>();
@@ -238,13 +244,18 @@ const owned = computed(() => {
 });
 
 const enriched = computed(() =>
-  prices.value.map(p => ({
-    ...p,
-    group: priceGroup(p.item_type),
-    owned: owned.value.get(p.item_id) ?? 0,
-    blocked: store.isBlocked(p.item_id),
-    manual: p.override_until_ms !== null && p.override_until_ms > now.value,
-  })),
+  prices.value.map(p => {
+    const manual = p.override_until_ms !== null && p.override_until_ms > now.value;
+    return {
+      ...p,
+      // A manual price that ended since the last reload is already gone in the backend.
+      price: manual ? p.price : p.market_price,
+      group: priceGroup(p.item_type),
+      owned: owned.value.get(p.item_id) ?? 0,
+      blocked: store.isBlocked(p.item_id),
+      manual,
+    };
+  }),
 );
 
 const manualCount = computed(() => enriched.value.filter(p => p.manual).length);
