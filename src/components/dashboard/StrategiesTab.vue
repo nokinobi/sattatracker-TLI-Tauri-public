@@ -434,7 +434,11 @@ async function load(opts: { boardOnly?: boolean } = {}) {
 // starts its own load through the filter watcher.
 async function tryAgain() {
   const before = stage.value;
-  if (!stages.value.length) await loadStages();
+  if (!stages.value.length) {
+    await loadStages();
+    // Still no list: the error stays on screen, and the failing server gets no more requests.
+    if (!stages.value.length) return;
+  }
   if (!unmounted && stage.value && stage.value === before) void load();
 }
 
