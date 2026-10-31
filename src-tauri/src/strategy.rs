@@ -309,9 +309,11 @@ fn turn_for(slots: &mut HashMap<String, Turn>, key: &str) -> Turn {
     slots.entry(key.to_string()).or_default().clone()
 }
 
-/// Forgets the question once nobody else is waiting for it: only the map and `turn` still hold it.
-fn release_turn(slots: &mut HashMap<String, Turn>, key: &str, turn: &Turn) {
-    if Arc::strong_count(turn) <= 2 {
+/// Gives up a caller's turn, and forgets the question once only the map still holds it. The turn is
+/// dropped under the map's lock, so the last of several callers always sees that it was the last.
+fn release_turn(slots: &mut HashMap<String, Turn>, key: &str, turn: Turn) {
+    drop(turn);
+    if slots.get(key).is_some_and(|t| Arc::strong_count(t) == 1) {
         slots.remove(key);
     }
 }
@@ -412,7 +414,7 @@ pub async fn strategy_api(
         let _waited = turn.lock().await;
         ask_server(&endpoint, &params, key.clone(), &what).await
     };
-    release_turn(&mut IN_FLIGHT.lock().unwrap(), &key, &turn);
+    release_turn(&mut IN_FLIGHT.lock().unwrap(), &key, turn);
     answer
 }
 
@@ -538,10 +540,9 @@ mod tests {
         let first = turn_for(&mut slots, "k");
         let second = turn_for(&mut slots, "k");
         assert!(Arc::ptr_eq(&first, &second));
-        release_turn(&mut slots, "k", &first);
+        release_turn(&mut slots, "k", first);
         assert!(slots.contains_key("k"));
-        drop(first);
-        release_turn(&mut slots, "k", &second);
+        release_turn(&mut slots, "k", second);
         assert!(!slots.contains_key("k"));
     }
 
