@@ -487,6 +487,9 @@ export const useTrackerStore = defineStore('tracker', {
       if (price !== null && !(Number.isFinite(price) && price > 0 && price <= MAX_MAP_ITEM_PRICE)) return false;
       const map = this.mapHistory.find(m => m.id === mapId);
       if (!map) return false;
+      const inCurrent = map.sessionId === this.sessionId;
+      const archived = inCurrent ? undefined : this.archivedSessions.find(s => s.id === map.sessionId);
+      const sessionProfit = inCurrent ? this.totalProfit : archived?.profit ?? 0;
       const fits = (...values: number[]) => values.every(v => Math.abs(v) <= MAX_SAVED_VALUE);
       // How much the map's profit changes. Not rounded, so a revert lands exactly where it started.
       let delta: number;
@@ -495,12 +498,12 @@ export const useTrackerStore = defineStore('tracker', {
         if (!d) return false;
         const next = price ?? d.originalPrice ?? d.price;
         delta = (next - d.price) * d.qty;
-        if (!fits(next * d.qty, map.lootValue + delta, map.profit + delta)) return false;
+        if (!fits(next * d.qty, map.lootValue + delta, map.profit + delta, sessionProfit + delta)) return false;
         if (price === null) delete d.originalPrice;
         else if (d.originalPrice === undefined) d.originalPrice = d.price;
         d.price = next;
         map.lootValue = Math.max(0, map.lootValue + delta);
-        if (map.sessionId === this.sessionId) {
+        if (inCurrent) {
           const s = this.sessionDrops.find(x => x.item_id === itemId);
           if (s && s.qty > 0) s.price = Math.max(0, (s.price * s.qty + delta) / s.qty);
         }
@@ -509,18 +512,15 @@ export const useTrackerStore = defineStore('tracker', {
         if (!e) return false;
         const next = price === null ? e.originalTotal ?? e.total : price * e.qty;
         delta = e.total - next;
-        if (!fits(next, map.expenseValue - delta, map.profit + delta)) return false;
+        if (!fits(next, map.expenseValue - delta, map.profit + delta, sessionProfit + delta)) return false;
         if (price === null) delete e.originalTotal;
         else if (e.originalTotal === undefined) e.originalTotal = e.total;
         e.total = next;
         map.expenseValue = Math.max(0, map.expenseValue - delta);
       }
       map.profit += delta;
-      if (map.sessionId === this.sessionId) this.totalProfit += delta;
-      else {
-        const archived = this.archivedSessions.find(s => s.id === map.sessionId);
-        if (archived) archived.profit += delta;
-      }
+      if (inCurrent) this.totalProfit += delta;
+      else if (archived) archived.profit += delta;
       this.stateDirty = true;
       void this.saveStateToDisk();
       return true;

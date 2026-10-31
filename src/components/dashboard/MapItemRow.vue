@@ -35,7 +35,7 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue';
 import { getIcon } from '../../utils/assets';
-import { fmtPrice } from './format';
+import { fmtPrice, parseDecimal } from './format';
 
 const props = defineProps<{
   itemId: string;
@@ -54,22 +54,33 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ edit: []; revert: []; cancel: []; apply: [price: number] }>();
 
-const MAX_PRICE = 1e7;
+const MAX_PRICE = 10_000_000;
 const text = ref('');
 const ownError = ref('');
 const input = ref<HTMLInputElement | null>(null);
 
+const shown = (unit: number) => String(Math.round(unit * 1000) / 1000);
+
 watch(() => props.editing, (open) => {
   if (!open) return;
-  text.value = String(Math.round(props.unit * 1000) / 1000);
+  text.value = shown(props.unit);
   ownError.value = '';
   void nextTick(() => input.value?.focus());
 }, { immediate: true });
 
 function apply() {
-  const price = Number(text.value.trim().replace(',', '.'));
-  if (!Number.isFinite(price) || price <= 0 || price > MAX_PRICE) {
-    ownError.value = 'Enter a price above 0.';
+  // Left as it was opened: nothing to change, and the field holds a rounded value.
+  if (text.value.trim() === shown(props.unit)) {
+    emit('cancel');
+    return;
+  }
+  const price = parseDecimal(text.value);
+  if (price === null || price <= 0) {
+    ownError.value = 'Enter a price above 0, like 1500 or 1.5.';
+    return;
+  }
+  if (price > MAX_PRICE) {
+    ownError.value = 'The price can be at most 10,000,000.';
     return;
   }
   ownError.value = '';

@@ -112,7 +112,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useTrackerStore } from '../../stores/trackerStore';
 import { getIcon } from '../../utils/assets';
 import { PRICE_GROUPS, priceGroup, type PriceGroup } from './categories';
-import { fmtAgo, fmtLeft, fmtPrice } from './format';
+import { fmtAgo, fmtLeft, fmtPrice, parseDecimal } from './format';
 import SortHead from './SortHead.vue';
 import { sortedBy, useSort } from './useSort';
 
@@ -187,18 +187,16 @@ function openEditor(p: { item_id: string; price: number }) {
   });
 }
 
-const decimal = (text: string) => Number(text.trim().replace(',', '.'));
-
 async function applyOverride(itemId: string) {
-  const price = decimal(editPrice.value);
-  if (!Number.isFinite(price) || price <= 0) {
-    editError.value = 'Enter a price above 0.';
+  const price = parseDecimal(editPrice.value);
+  if (price === null || price <= 0) {
+    editError.value = 'Enter a price above 0, like 1500 or 1.5.';
     return;
   }
   let minutes = editMinutes.value;
   if (editHours.value.trim()) {
-    const hours = decimal(editHours.value);
-    if (!Number.isFinite(hours) || hours <= 0 || hours > MAX_HOURS) {
+    const hours = parseDecimal(editHours.value);
+    if (hours === null || hours <= 0 || hours > MAX_HOURS) {
       editError.value = `Enter a time up to ${MAX_HOURS} hours (7 days).`;
       return;
     }
