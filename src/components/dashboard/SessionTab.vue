@@ -422,7 +422,11 @@ watch(rows, (list) => {
 watch(() => props.focusMapId, (id) => {
   if (!id) return;
   view.value = 'maps';
-  if (!rows.value.find(r => r.id === id)) scope.value = 'current';
+  if (!rows.value.find(r => r.id === id)) {
+    const map = store.mapHistory.find(m => m.id === id);
+    if (!map || map.sessionId === store.sessionId) scope.value = 'current';
+    else scope.value = store.archivedSessions.some(s => s.id === map.sessionId) ? map.sessionId : 'all';
+  }
   selectedId.value = id;
 }, { immediate: true });
 
