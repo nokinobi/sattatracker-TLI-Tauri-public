@@ -201,14 +201,14 @@
             <span class="dash-icon"><img :src="getIcon(d.item_id)" alt="" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" /></span>
             <span class="name">
               <span>{{ d.item_name }}</span>
-              <small>{{ d.type ? `${d.type} · ` : '' }}x{{ d.qty }} @ {{ fmtPrice(d.shownUnit) }}{{ d.maps ? ` · dropped in ${d.maps} ${d.maps === 1 ? 'map' : 'maps'}` : '' }}<template v-if="d.was !== undefined"> · <b>edited, was {{ fmtPrice(d.was) }}</b><template v-if="d.unchanged > 0"> · {{ d.unchanged }} at the recorded price</template></template></small>
+              <small>{{ d.type ? `${d.type} · ` : '' }}x{{ d.qty }} @ {{ fmtPrice(d.shownUnit) }}{{ d.mixed ? ' on average' : '' }}{{ d.maps ? ` · dropped in ${d.maps} ${d.maps === 1 ? 'map' : 'maps'}` : '' }}<template v-if="d.was !== undefined"> · <b>edited, was {{ fmtPrice(d.was) }}</b><template v-if="d.unchanged > 0"> · {{ d.unchanged }} at the recorded price</template></template></small>
             </span>
             <span class="bar"><span><i :style="{ width: d.bar + '%' }"></i></span><b class="mono">{{ d.share.toFixed(0) }}%</b></span>
             <span :class="['mono', 'r', d.was !== undefined ? 'accent' : 'gold']">{{ fmtValue(d.value) }} FE</span>
             <span class="act">
               <button v-if="d.was !== undefined && lootScopeSession !== null" class="dash-btn small" title="Back to the recorded prices in this session" @click="revertLootPrice(d.item_id)">Revert</button>
               <button
-                v-else-if="d.editable"
+                v-if="d.editable && (d.was === undefined || d.partial)"
                 class="pencil"
                 :aria-expanded="lootEditing === d.item_id"
                 :aria-label="`Edit the price of ${d.item_name} in this session`"
@@ -611,11 +611,15 @@ const scopeLoot = computed(() => {
         stored: s?.maps ?? 0,
         // What the finished maps hold: the editor starts from this, not from drops of the running map.
         unit: s && s.qty > 0 ? s.value / s.qty : 0,
-        was: s?.edited ? s.original / (s.qty || 1) : undefined,
-        // An edited row shows the price that was set. Drops of the running map or past the 80 a map
-        // keeps aren't repriced, so an average over all of them would show a price nobody entered.
-        shownUnit: s?.edited && s.qty > 0 ? s.value / s.qty : d.value / (d.qty || 1),
-        unchanged: s?.edited ? Math.max(0, d.qty - s.qty) : 0,
+        was: s?.edited ? s.editedOriginal / s.editedQty : undefined,
+        // An edited row shows the price that was set. Other drops of the item keep their recorded
+        // price (a map finished later, the running map, past the 80 a map keeps), so an average over
+        // all of them would show a price nobody entered. Maps edited to different prices are an average.
+        shownUnit: s?.edited ? (s.samePrice ? s.editedValue / s.editedQty : s.value / s.qty) : d.value / (d.qty || 1),
+        mixed: !!s?.edited && !s.samePrice,
+        unchanged: s?.edited ? Math.max(0, d.qty - s.editedQty) : 0,
+        // Not every drop holds one set price, so the pencil stays to set it again for all of them.
+        partial: !!s?.edited && (!s.samePrice || s.editedQty < s.qty),
         editable: session !== null && !!s && s.qty > 0,
       };
     });
@@ -629,14 +633,25 @@ const lootScopeSession = computed(() => {
 
 // The drops of the finished maps in the selection, per item. Only these can be repriced.
 const storedLoot = computed(() => {
-  const byId = new Map<string, { qty: number; value: number; original: number; maps: number; edited: boolean }>();
+  const byId = new Map<string, {
+    qty: number; value: number; maps: number; edited: boolean;
+    editedQty: number; editedValue: number; editedOriginal: number; editedPrice: number; samePrice: boolean;
+  }>();
   rows.value.filter(r => !r.live).forEach(r => r.drops.forEach(d => {
-    const cur = byId.get(d.item_id) ?? { qty: 0, value: 0, original: 0, maps: 0, edited: false };
+    const cur = byId.get(d.item_id) ?? {
+      qty: 0, value: 0, maps: 0, edited: false, editedQty: 0, editedValue: 0, editedOriginal: 0, editedPrice: 0, samePrice: true,
+    };
     cur.qty += d.qty;
     cur.value += d.price * d.qty;
-    cur.original += (d.originalPrice ?? d.price) * d.qty;
     cur.maps += 1;
-    cur.edited = cur.edited || d.originalPrice !== undefined;
+    if (d.originalPrice !== undefined) {
+      if (cur.edited && d.price !== cur.editedPrice) cur.samePrice = false;
+      cur.edited = true;
+      cur.editedPrice = d.price;
+      cur.editedQty += d.qty;
+      cur.editedValue += d.price * d.qty;
+      cur.editedOriginal += d.originalPrice * d.qty;
+    }
     byId.set(d.item_id, cur);
   }));
   return byId;
@@ -857,14 +872,14 @@ function onChartMove(e: MouseEvent) {
 .ss-loot-tools { display: flex; flex-direction: column; gap: 6px; padding: 10px 18px 0; }
 .ss-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .ss-loot-note { font-size: 11px; color: var(--label); }
-.ss-loot-head, .ss-loot-line { display: grid; grid-template-columns: 30px minmax(0, 1fr) 150px 90px 62px; gap: 12px; align-items: center; }
+.ss-loot-head, .ss-loot-line { display: grid; grid-template-columns: 30px minmax(0, 1fr) 150px 90px 88px; gap: 12px; align-items: center; }
 .ss-loot-head { padding: 8px 30px 4px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--label); }
 .ss-loot-list { flex: 1; min-height: 0; padding: 0 18px 14px; display: flex; flex-direction: column; gap: 4px; }
 .ss-loot-item { flex-shrink: 0; border-radius: 10px; overflow: hidden; background: var(--panel); border: 1px solid var(--panel-border); }
 .ss-loot-item.edited, .ss-loot-item.open { border-color: var(--accent-border); }
 .ss-loot-line { padding: 6px 12px; }
 .ss-loot-line .accent { color: var(--accent-text); }
-.ss-loot-line .act { display: flex; justify-content: flex-end; }
+.ss-loot-line .act { display: flex; justify-content: flex-end; gap: 4px; }
 .ss-loot-line .act .dash-btn { align-self: center; }
 .pencil { flex-shrink: 0; width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; background: var(--chip); border: 1px solid var(--chip-border); color: var(--muted); }
 .pencil:hover { border-color: var(--accent-border); color: var(--strong); }
