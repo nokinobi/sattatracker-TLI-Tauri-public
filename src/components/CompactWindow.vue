@@ -280,13 +280,15 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
-import { useTrackerStore } from '../stores/trackerStore';
+import { COMPACT_THRESHOLD_STEPS as THRESHOLD_STEPS, useTrackerStore } from '../stores/trackerStore';
 import { getIcon } from '../utils/assets';
 import { cursorX, cursorY, updateCursor } from '../utils/cursor';
 
 const WIDGET_ID = 'compactWindow';
 const RESIZE_SNAP = 12;
 const MAX_W     = 640;
+const MIN_H     = 20;
+const MAX_H     = 2000;
 
 // Narrowing the window drops the top-row blocks one at a time: first the map timer,
 // then profit/hr. Map profit always stays; its width is the window's minimum.
@@ -308,9 +310,6 @@ const EFFECTS: { id: HighValueEffect; label: string }[] = [
   { id: 'off',  label: 'Off' },
 ];
 const FX_MS = 2600;
-// The overlay never takes keyboard focus from the game, so the threshold is a slider over
-// fixed steps instead of a text field. 0 turns marking and effects off.
-const THRESHOLD_STEPS = [0, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
 
 const PANEL_GAP    = 6;
 const CFG_GAP      = 8;
@@ -459,7 +458,7 @@ function rowStyle(id: string) {
 // session can reach millions).
 function fmtAmount(n: number): string {
   const a = Math.abs(n);
-  if (a >= 999_950) return (a / 1e6).toFixed(a >= 9_999_500 ? 0 : 1) + 'M';
+  if (a >= 999_500) return (a / 1e6).toFixed(a >= 9_950_000 ? 0 : 1) + 'M';
   if (a >= 99_999.5) return Math.round(a / 1e3) + 'k';
   if (a >= 999.95) return String(Math.round(a));
   return a.toFixed(1);
@@ -692,10 +691,10 @@ function applySaved() {
   const saved = store.widgetPositions.compactWindow;
   if (!saved) return;
   // A position saved on a bigger screen could put the click-through window out of reach.
-  if (saved.w) w.value = Math.min(MAX_W, Math.max(oneColW.value, saved.w));
-  if (saved.h) h.value = saved.h;
-  x.value = Math.min(Math.max(0, saved.x), Math.max(0, window.innerWidth - w.value));
-  y.value = Math.min(Math.max(0, saved.y), Math.max(0, window.innerHeight - 24));
+  if (Number.isFinite(saved.w)) w.value = Math.min(MAX_W, Math.max(oneColW.value, saved.w as number));
+  if (Number.isFinite(saved.h)) h.value = Math.min(MAX_H, Math.max(MIN_H, saved.h as number));
+  if (Number.isFinite(saved.x)) x.value = Math.min(Math.max(0, saved.x), Math.max(0, window.innerWidth - w.value));
+  if (Number.isFinite(saved.y)) y.value = Math.min(Math.max(0, saved.y), Math.max(0, window.innerHeight - 24));
 }
 
 watch(() => store.widgetPositions.compactWindow, () => { if (!dragMode.value) applySaved(); }, { deep: true });
@@ -742,16 +741,16 @@ onUnmounted(() => {
   100% { box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 0 0 rgba(251,191,36,0); border-color: rgba(255,255,255,.12); }
 }
 @keyframes cw-pop-a {
-  0%   { transform: scale(1); color: #4ade80; text-shadow: none; }
+  0%   { transform: scale(1); text-shadow: none; }
   18%  { transform: scale(1.25); color: #fde047; text-shadow: 0 0 14px rgba(250,204,21,.85); }
   45%  { transform: scale(1.08); color: #fde047; text-shadow: 0 0 8px rgba(250,204,21,.6); }
-  100% { transform: scale(1); color: #4ade80; text-shadow: none; }
+  100% { transform: scale(1); text-shadow: none; }
 }
 @keyframes cw-pop-b {
-  0%   { transform: scale(1); color: #4ade80; text-shadow: none; }
+  0%   { transform: scale(1); text-shadow: none; }
   18%  { transform: scale(1.25); color: #fde047; text-shadow: 0 0 14px rgba(250,204,21,.85); }
   45%  { transform: scale(1.08); color: #fde047; text-shadow: 0 0 8px rgba(250,204,21,.6); }
-  100% { transform: scale(1); color: #4ade80; text-shadow: none; }
+  100% { transform: scale(1); text-shadow: none; }
 }
 @keyframes cw-float {
   0%   { opacity: 0; transform: translateY(8px); }
