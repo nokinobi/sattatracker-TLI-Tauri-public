@@ -606,7 +606,8 @@ const scopeLoot = computed(() => {
         share: (d.value / total) * 100,
         bar: (d.value / top) * 100,
         type: type ?? '',
-        group: type === undefined ? '' : priceGroup(type),
+        // Unknown items have an empty type and no group; they show under All.
+        group: type ? priceGroup(type) : '',
         stored: s?.maps ?? 0,
         // What the finished maps hold: the editor starts from this, not from drops of the running map.
         unit: s && s.qty > 0 ? s.value / s.qty : 0,
@@ -705,9 +706,11 @@ const inLootGroup = computed(() => scopeLoot.value.filter(d => lootGroup.value =
 const lootTypes = computed(() => countBy(inLootGroup.value.map(d => d.type)));
 const shownLoot = computed(() => inLootGroup.value.filter(d => lootType.value === 'all' || d.type === lootType.value));
 
-// Another session can have none of the picked group or type.
+// Another session can have none of the picked group or type. With one group left its chips are
+// hidden too, so a filter must not stay on where it can't be cleared.
 watch([lootGroups, lootTypes], () => {
-  if (lootGroup.value !== 'all' && !lootGroups.value.some(g => g.id === lootGroup.value)) pickLootGroup('all');
+  const groupGone = !lootGroups.value.some(g => g.id === lootGroup.value);
+  if (lootGroup.value !== 'all' && (groupGone || lootGroups.value.length <= 1)) pickLootGroup('all');
   else if (lootType.value !== 'all' && !lootTypes.value.some(t => t.id === lootType.value)) lootType.value = 'all';
 });
 
