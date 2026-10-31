@@ -39,7 +39,8 @@ export interface InventorySnapshotItem {
   price:     number;
 }
 
-// Amounts the Compact Window's high-value slider steps through. 0 turns marking and effects off.
+// Amounts the Compact Window's high-value slider steps through (a slider because the overlay
+// never takes keyboard focus from the game). 0 turns marking and effects off.
 export const COMPACT_THRESHOLD_STEPS = [0, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
 
 export interface LootItem {

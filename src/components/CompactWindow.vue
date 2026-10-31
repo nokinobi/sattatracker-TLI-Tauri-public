@@ -310,8 +310,6 @@ const EFFECTS: { id: HighValueEffect; label: string }[] = [
   { id: 'off',  label: 'Off' },
 ];
 const FX_MS = 2600;
-// The overlay never takes keyboard focus from the game, so the threshold is a slider over
-// fixed steps instead of a text field.
 
 const PANEL_GAP    = 6;
 const CFG_GAP      = 8;
