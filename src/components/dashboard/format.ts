@@ -46,6 +46,16 @@ export function fmtFull(ms: number): string {
   });
 }
 
+// Time left on something, e.g. "42 min left", "1 h 12 min left".
+export function fmtLeft(ms: number): string {
+  const min = Math.ceil(ms / 60000);
+  if (min <= 1) return 'under 1 min left';
+  if (min < 60) return `${min} min left`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h} h ${m} min left` : `${h} h left`;
+}
+
 export function fmtAgo(ms: number, now: number): string {
   const min = Math.max(0, Math.round((now - ms) / 60000));
   if (min < 1) return 'just now';

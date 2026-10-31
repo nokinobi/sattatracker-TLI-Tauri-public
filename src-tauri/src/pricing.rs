@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -11,6 +12,9 @@ use std::sync::{
 lazy_static! {
     static ref PRICE_CACHE: Mutex<HashMap<String, f64>> = Mutex::new(HashMap::new());
     static ref BLOCKED_ITEMS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
+    // Kept apart from PRICE_CACHE because every refresh replaces that table.
+    static ref OVERRIDES: Mutex<HashMap<String, PriceOverride>> = Mutex::new(HashMap::new());
+    static ref OVERRIDES_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 }
 
 static FULL_PRICE_LOADED: AtomicBool = AtomicBool::new(false);
@@ -29,7 +33,115 @@ pub fn cached_price(item_id: &str) -> Option<f64> {
     if item_id == "100300" {
         return Some(1.0);
     }
+    if let Some(price) = override_price(item_id) {
+        return Some(price);
+    }
     PRICE_CACHE.lock().unwrap().get(item_id).copied()
+}
+
+/// A price the user set by hand, used instead of the market price until `until_ms`.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PriceOverride {
+    pub price: f64,
+    pub until_ms: i64,
+}
+
+const MAX_OVERRIDES: usize = 500;
+const MAX_OVERRIDE_MINUTES: u32 = 7 * 24 * 60;
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+fn override_price(item_id: &str) -> Option<f64> {
+    let now = now_ms();
+    OVERRIDES
+        .lock()
+        .unwrap()
+        .get(item_id)
+        .filter(|o| o.until_ms > now)
+        .map(|o| o.price)
+}
+
+/// The overrides still running, for the Prices tab.
+pub fn active_overrides() -> HashMap<String, PriceOverride> {
+    let now = now_ms();
+    OVERRIDES
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(_, o)| o.until_ms > now)
+        .map(|(id, o)| (id.clone(), *o))
+        .collect()
+}
+
+fn parse_overrides(text: &str, now: i64) -> HashMap<String, PriceOverride> {
+    let raw: HashMap<String, PriceOverride> = serde_json::from_str(text).unwrap_or_default();
+    raw.into_iter()
+        .filter(|(id, o)| valid_item_id(id) && valid_override_price(o.price) && o.until_ms > now)
+        .take(MAX_OVERRIDES)
+        .collect()
+}
+
+fn valid_override_price(price: f64) -> bool {
+    valid_price(price) && price > 0.0
+}
+
+/// Loads saved overrides at startup; ones that ended while the tracker was closed are dropped.
+pub fn init_overrides(path: PathBuf) {
+    let loaded = std::fs::read_to_string(&path)
+        .map(|text| parse_overrides(&text, now_ms()))
+        .unwrap_or_default();
+    *OVERRIDES.lock().unwrap() = loaded;
+    *OVERRIDES_PATH.lock().unwrap() = Some(path);
+}
+
+fn save_overrides(overrides: &HashMap<String, PriceOverride>) {
+    let Some(path) = OVERRIDES_PATH.lock().unwrap().clone() else {
+        return;
+    };
+    let tmp = path.with_extension("json.tmp");
+    let result = serde_json::to_string(overrides)
+        .map_err(|e| e.to_string())
+        .and_then(|data| std::fs::write(&tmp, data).map_err(|e| e.to_string()))
+        .and_then(|_| std::fs::rename(&tmp, &path).map_err(|e| e.to_string()));
+    if let Err(e) = result {
+        crate::applog::warn("pricing", &format!("could not save manual prices: {}", e));
+    }
+}
+
+/// Uses `price` for this item for the next `minutes`. Returns when it ends.
+pub fn set_override(item_id: &str, price: f64, minutes: u32) -> Result<i64, String> {
+    if !valid_item_id(item_id) || item_id == "100300" {
+        return Err("This item's price can't be changed".to_string());
+    }
+    if !valid_override_price(price) {
+        return Err("Enter a price above 0".to_string());
+    }
+    if minutes == 0 || minutes > MAX_OVERRIDE_MINUTES {
+        return Err("The time must be between 1 minute and 7 days".to_string());
+    }
+    let now = now_ms();
+    let until_ms = now + minutes as i64 * 60_000;
+    let mut overrides = OVERRIDES.lock().unwrap();
+    overrides.retain(|_, o| o.until_ms > now);
+    if !overrides.contains_key(item_id) && overrides.len() >= MAX_OVERRIDES {
+        return Err("Too many manual prices; reset some first".to_string());
+    }
+    overrides.insert(item_id.to_string(), PriceOverride { price, until_ms });
+    save_overrides(&overrides);
+    Ok(until_ms)
+}
+
+/// Goes back to the market price now.
+pub fn clear_override(item_id: &str) {
+    let mut overrides = OVERRIDES.lock().unwrap();
+    if overrides.remove(item_id).is_some() {
+        save_overrides(&overrides);
+    }
 }
 
 /// Base URLs of the price server, which also serves strategy data.
@@ -110,15 +222,20 @@ impl PricingManager {
         if item_id == "100300" {
             return 1.0;
         }
-        if item_id.ends_with("300") && item_id.len() > 3 {
-            return 0.0;
-        }
 
         {
             let blocked = BLOCKED_ITEMS.lock().unwrap();
             if blocked.contains(item_id) {
                 return 0.0;
             }
+        }
+
+        if let Some(price) = override_price(item_id) {
+            return price;
+        }
+
+        if item_id.ends_with("300") && item_id.len() > 3 {
+            return 0.0;
         }
 
         {
@@ -146,14 +263,17 @@ impl PricingManager {
         if item_id == "100300" {
             return 1.0;
         }
-        if item_id.ends_with("300") && item_id.len() > 3 {
-            return 0.0;
-        }
         {
             let blocked = BLOCKED_ITEMS.lock().unwrap();
             if blocked.contains(item_id) {
                 return 0.0;
             }
+        }
+        if let Some(price) = override_price(item_id) {
+            return price;
+        }
+        if item_id.ends_with("300") && item_id.len() > 3 {
+            return 0.0;
         }
         let cache = PRICE_CACHE.lock().unwrap();
         cache.get(item_id).copied().unwrap_or(0.0)
@@ -376,6 +496,65 @@ mod tests {
             .collect();
         let t = parse_snapshot(&json!({ "data": rows }));
         assert_eq!(t.len(), MAX_TABLE_ENTRIES);
+    }
+
+    fn manager() -> PricingManager {
+        PricingManager::new(1601, PathBuf::new())
+    }
+
+    #[test]
+    fn override_wins_until_it_ends_and_survives_a_refresh() {
+        let id = "990001";
+        PRICE_CACHE.lock().unwrap().insert(id.to_string(), 5.0);
+        assert_eq!(manager().get_price_sync(id), 5.0);
+
+        set_override(id, 42.5, 60).unwrap();
+        assert_eq!(manager().get_price_sync(id), 42.5);
+        assert_eq!(cached_price(id), Some(42.5));
+
+        // A refresh or an auction price only touches the market table.
+        PricingManager::update_local_price(id, 7.0);
+        assert_eq!(manager().get_price_sync(id), 42.5);
+
+        OVERRIDES.lock().unwrap().get_mut(id).unwrap().until_ms = now_ms() - 1;
+        assert_eq!(manager().get_price_sync(id), 7.0);
+        assert!(!active_overrides().contains_key(id));
+    }
+
+    #[test]
+    fn clearing_goes_back_to_the_market_price() {
+        let id = "990002";
+        PRICE_CACHE.lock().unwrap().insert(id.to_string(), 9.0);
+        set_override(id, 100.0, 30).unwrap();
+        clear_override(id);
+        assert_eq!(manager().get_price_sync(id), 9.0);
+    }
+
+    #[test]
+    fn bad_overrides_are_refused() {
+        assert!(set_override("100300", 2.0, 60).is_err());
+        assert!(set_override("../x", 2.0, 60).is_err());
+        assert!(set_override("990003", 0.0, 60).is_err());
+        assert!(set_override("990003", -1.0, 60).is_err());
+        assert!(set_override("990003", f64::NAN, 60).is_err());
+        assert!(set_override("990003", 1e30, 60).is_err());
+        assert!(set_override("990003", 2.0, 0).is_err());
+        assert!(set_override("990003", 2.0, MAX_OVERRIDE_MINUTES + 1).is_err());
+        assert!(!active_overrides().contains_key("990003"));
+    }
+
+    #[test]
+    fn saved_overrides_load_only_when_valid_and_still_running() {
+        let text = r#"{
+            "11": {"price": 5.0, "until_ms": 2000},
+            "12": {"price": 5.0, "until_ms": 500},
+            "13": {"price": -5.0, "until_ms": 2000},
+            "../x": {"price": 5.0, "until_ms": 2000}
+        }"#;
+        let loaded = parse_overrides(text, 1000);
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded["11"].price, 5.0);
+        assert!(parse_overrides("not json", 1000).is_empty());
     }
 
     #[test]

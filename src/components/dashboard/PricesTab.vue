@@ -47,10 +47,11 @@
           <input v-model.number="minPrice" class="pr-num mono" type="number" min="0" placeholder="min" aria-label="Minimum price" />
           <span>–</span>
           <input v-model.number="maxPrice" class="pr-num mono" type="number" min="0" placeholder="max" aria-label="Maximum price" />
-          <div class="dash-seg" role="group" aria-label="Blocked items">
+          <div class="dash-seg" role="group" aria-label="Show items">
             <button :class="{ on: blockedFilter === 'all' }" @click="blockedFilter = 'all'">All</button>
             <button :class="{ on: blockedFilter === 'counted' }" @click="blockedFilter = 'counted'">Counted</button>
             <button :class="{ on: blockedFilter === 'blocked' }" @click="blockedFilter = 'blocked'">Blocked</button>
+            <button :class="{ on: blockedFilter === 'manual' }" @click="blockedFilter = 'manual'">Manual {{ manualCount }}</button>
           </div>
           <label class="sort">
             <span>Sort</span>
@@ -64,19 +65,42 @@
       </div>
 
       <div class="pr-head">
-        <span></span><span>Item</span><span class="r">Price</span><span class="r">In bag</span>
+        <span></span><span>Item</span><span class="r">Price</span><span class="r">In bag</span><span></span>
       </div>
       <div class="pr-list dash-scroll">
         <div v-if="loading && prices.length === 0" class="dash-empty">Loading prices…</div>
-        <div v-else-if="visible.length === 0" class="dash-empty">No prices match</div>
-        <div v-for="p in visible" :key="p.item_id" :class="['pr-row', { owned: p.owned > 0, blocked: p.blocked }]">
-          <span class="dash-icon"><img :src="getIcon(p.item_id)" alt="" loading="lazy" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" /></span>
-          <span class="name">
-            <span>{{ p.item_name }}</span>
-            <small>{{ p.group }} · {{ p.item_type || 'Unknown type' }}{{ p.blocked ? ' · blocked' : '' }}</small>
-          </span>
-          <span class="mono r gold strong">{{ fmtPrice(p.price) }}</span>
-          <span class="mono r" :class="p.owned ? '' : 'faint'">{{ p.owned ? 'x' + p.owned.toLocaleString() : '—' }}</span>
+        <div v-else-if="visible.length === 0" class="dash-empty">{{ blockedFilter === 'manual' ? 'No manual prices right now' : 'No prices match' }}</div>
+        <div v-for="p in visible" :key="p.item_id" :class="['pr-item', { owned: p.owned > 0, blocked: p.blocked, manual: p.manual || editing === p.item_id }]">
+          <div class="pr-row">
+            <span class="dash-icon"><img :src="getIcon(p.item_id)" alt="" loading="lazy" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" /></span>
+            <span class="name">
+              <span>{{ p.item_name }}</span>
+              <small>{{ p.group }} · {{ p.item_type || 'Unknown type' }}{{ p.blocked ? ' · blocked' : '' }}<template v-if="p.manual"> · <b>Manual price · {{ fmtLeft(p.override_until_ms! - now) }}</b></template></small>
+            </span>
+            <span class="price">
+              <span :class="['mono', 'r', 'strong', p.manual ? 'accent' : 'gold']">{{ fmtPrice(p.price) }}</span>
+              <small v-if="p.manual" class="mono market" title="Market price">{{ p.market_price > 0 ? fmtPrice(p.market_price) : 'no price' }}</small>
+            </span>
+            <span class="mono r" :class="p.owned ? '' : 'faint'">{{ p.owned ? 'x' + p.owned.toLocaleString() : '—' }}</span>
+            <button v-if="p.manual" class="dash-btn small act danger" :aria-label="`Reset the price of ${p.item_name}`" @click="resetOverride(p.item_id)">Reset</button>
+            <button v-else-if="!p.blocked" class="dash-btn small act" :aria-expanded="editing === p.item_id" :aria-label="`Set a price for ${p.item_name}`" @click="openEditor(p)">Set price</button>
+          </div>
+          <form v-if="editing === p.item_id" class="pr-edit" @submit.prevent="applyOverride(p.item_id)" @keydown.esc="editing = null">
+            <label class="fld">Price
+              <input ref="priceInput" v-model="editPrice" class="pr-num mono big" type="text" inputmode="decimal" maxlength="12" aria-label="Manual price in FE" @focus="($event.target as HTMLInputElement).select()" /> FE
+            </label>
+            <span>for</span>
+            <div class="dash-seg" role="group" aria-label="Duration">
+              <button v-for="d in DURATIONS" :key="d.minutes" type="button" :class="{ on: !editHours && editMinutes === d.minutes }" :aria-pressed="!editHours && editMinutes === d.minutes" @click="editMinutes = d.minutes; editHours = ''">{{ d.label }}</button>
+            </div>
+            <label class="fld">or
+              <input v-model="editHours" class="pr-num mono hours" type="text" inputmode="decimal" maxlength="5" placeholder="2.5" aria-label="Custom duration in hours" /> h
+            </label>
+            <button class="dash-btn small primary push" type="submit">Apply</button>
+            <button class="dash-btn small" type="button" @click="editing = null">Cancel</button>
+            <span v-if="editError" class="err" role="alert">{{ editError }}</span>
+            <span class="hint">Used for new drops and your bag value until the time runs out, then the market price is back. Drops already recorded keep their value.</span>
+          </form>
         </div>
         <button v-if="filtered.length > visible.length" class="dash-btn pr-more" @click="limit += PAGE">
           Show {{ Math.min(PAGE, filtered.length - visible.length) }} more of {{ filtered.length - visible.length }}
@@ -87,19 +111,34 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { useTrackerStore } from '../../stores/trackerStore';
 import { getIcon } from '../../utils/assets';
 import { PRICE_GROUPS, priceGroup, type PriceGroup } from './categories';
-import { fmtAgo, fmtPrice } from './format';
+import { fmtAgo, fmtLeft, fmtPrice } from './format';
 
-interface PriceEntry { item_id: string; item_name: string; item_type: string; price: number }
+interface PriceEntry {
+  item_id: string;
+  item_name: string;
+  item_type: string;
+  // The price in use: the manual one while it runs.
+  price: number;
+  market_price: number;
+  override_until_ms: number | null;
+}
 interface PriceStatus { count: number; last_refresh_ms: number }
 
 const store = useTrackerStore();
 
 const PAGE = 200;
+const DURATIONS = [
+  { label: '30 min', minutes: 30 },
+  { label: '1 h', minutes: 60 },
+  { label: '3 h', minutes: 180 },
+  { label: '12 h', minutes: 720 },
+];
+const MAX_HOURS = 7 * 24;
 const prices = ref<PriceEntry[]>([]);
 const priceStatus = ref<PriceStatus>({ count: 0, last_refresh_ms: 0 });
 const loading = ref(true);
@@ -110,7 +149,7 @@ const type = ref('all');
 const query = ref('');
 const minPrice = ref<number | ''>('');
 const maxPrice = ref<number | ''>('');
-const blockedFilter = ref<'all' | 'counted' | 'blocked'>('all');
+const blockedFilter = ref<'all' | 'counted' | 'blocked' | 'manual'>('all');
 const sortBy = ref<'desc' | 'asc' | 'name'>('desc');
 const limit = ref(PAGE);
 
@@ -128,6 +167,61 @@ async function load() {
     loading.value = false;
     now.value = Date.now();
   }
+}
+
+// The item whose price is being set, and the editor's fields.
+const editing = ref<string | null>(null);
+const editPrice = ref('');
+const editMinutes = ref(60);
+const editHours = ref('');
+const editError = ref('');
+const priceInput = ref<HTMLInputElement[] | HTMLInputElement | null>(null);
+
+function openEditor(p: { item_id: string; price: number }) {
+  editing.value = p.item_id;
+  editPrice.value = String(Math.round(p.price * 100) / 100);
+  editMinutes.value = 60;
+  editHours.value = '';
+  editError.value = '';
+  void nextTick(() => {
+    const el = Array.isArray(priceInput.value) ? priceInput.value[0] : priceInput.value;
+    el?.focus();
+  });
+}
+
+const decimal = (text: string) => Number(text.trim().replace(',', '.'));
+
+async function applyOverride(itemId: string) {
+  const price = decimal(editPrice.value);
+  if (!Number.isFinite(price) || price <= 0) {
+    editError.value = 'Enter a price above 0.';
+    return;
+  }
+  let minutes = editMinutes.value;
+  if (editHours.value.trim()) {
+    const hours = decimal(editHours.value);
+    if (!Number.isFinite(hours) || hours <= 0 || hours > MAX_HOURS) {
+      editError.value = `Enter a time up to ${MAX_HOURS} hours (7 days).`;
+      return;
+    }
+    minutes = Math.max(1, Math.round(hours * 60));
+  }
+  try {
+    await invoke('set_price_override', { itemId, price, minutes });
+    editing.value = null;
+    await load();
+  } catch (e) {
+    editError.value = String(e);
+  }
+}
+
+async function resetOverride(itemId: string) {
+  try {
+    await invoke('clear_price_override', { itemId });
+  } catch (e) {
+    console.error('Failed to reset the price', e);
+  }
+  await load();
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -149,8 +243,11 @@ const enriched = computed(() =>
     group: priceGroup(p.item_type),
     owned: owned.value.get(p.item_id) ?? 0,
     blocked: store.isBlocked(p.item_id),
+    manual: p.override_until_ms !== null && p.override_until_ms > now.value,
   })),
 );
+
+const manualCount = computed(() => enriched.value.filter(p => p.manual).length);
 
 const groups = computed(() => [
   { id: 'all' as const, label: 'All prices', count: enriched.value.length },
@@ -178,7 +275,8 @@ const filtered = computed(() => {
     && (!q || p.item_name.toLowerCase().includes(q))
     && (lo === null || p.price >= lo)
     && (hi === null || p.price <= hi)
-    && (blockedFilter.value === 'all' || (blockedFilter.value === 'blocked') === p.blocked),
+    && (blockedFilter.value === 'all'
+      || (blockedFilter.value === 'manual' ? p.manual : (blockedFilter.value === 'blocked') === p.blocked)),
   );
   return list.sort((a, b) =>
     sortBy.value === 'name' ? a.item_name.localeCompare(b.item_name)
@@ -244,15 +342,28 @@ watch([group, type, query, minPrice, maxPrice, blockedFilter, sortBy], () => { l
 .pr-filters .dash-seg { margin-left: 10px; }
 .sort { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 
-.pr-head, .pr-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 90px 70px; gap: 12px; align-items: center; }
+.pr-head, .pr-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 100px 60px 76px; gap: 12px; align-items: center; }
 .pr-head { padding: 8px 30px 4px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--label); }
 .pr-list { flex: 1; min-height: 0; padding: 0 18px 14px; display: flex; flex-direction: column; gap: 4px; }
-.pr-row { flex-shrink: 0; padding: 5px 12px; border-radius: 9px; background: var(--panel); border: 1px solid var(--panel-border); font-size: 12px; }
-.pr-row.owned { border-color: var(--accent-border); }
-.pr-row.blocked { opacity: 0.55; }
+.pr-item { flex-shrink: 0; padding: 5px 12px; border-radius: 9px; background: var(--panel); border: 1px solid var(--panel-border); font-size: 12px; }
+.pr-item.owned, .pr-item.manual { border-color: var(--accent-border); }
+.pr-item.blocked { opacity: 0.55; }
 .pr-row .name { min-width: 0; display: flex; flex-direction: column; font-weight: 600; color: var(--strong); }
 .pr-row .name span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pr-row .name small { font-size: 10px; font-weight: 400; color: var(--label); }
+.pr-row .name small { font-size: 10px; font-weight: 400; color: var(--label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pr-row .name small b { font-weight: 600; color: var(--accent-text); }
+.pr-row .price { display: flex; flex-direction: column; align-items: flex-end; }
+.pr-row .price .accent { color: var(--accent-text); }
+.pr-row .market { font-size: 10px; color: var(--faint); text-decoration: line-through; }
+.pr-row .act { justify-self: end; align-self: center; }
+.pr-edit { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; padding: 8px 0 3px 42px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); }
+.pr-edit .fld { display: flex; align-items: center; gap: 6px; }
+.pr-edit .big { width: 76px; font-size: 12px; font-weight: 600; text-align: right; color: var(--strong); border-color: var(--accent-border); }
+.pr-edit .hours { width: 46px; text-align: right; }
+.pr-edit .push { margin-left: auto; }
+.pr-edit .dash-btn { align-self: center; }
+.pr-edit .err { flex-basis: 100%; color: var(--neg); font-weight: 600; }
+.pr-edit .hint { flex-basis: 100%; font-size: 10px; color: var(--label); }
 .r { text-align: right; }
 .strong { font-weight: 700; font-size: 13px; }
 .faint { color: var(--faint); }
