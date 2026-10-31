@@ -291,7 +291,7 @@ import { sortedBy, useSort } from './useSort';
 import { PROFOUND, TREES } from './strategies/trees';
 import {
   areaName, strategyApi, itemInfo, itemKind, stageName, timeName, treeList, treeName,
-  type FilterItem, type LeaderboardData, type Query, type StageOptions, type TagsData,
+  type FilterItem, type ItemInfo, type LeaderboardData, type Query, type StageOptions, type TagsData,
 } from './strategies/api';
 import {
   stage, stages, seasonId, timemark, sort, minCount, page, picks, itemQuery, mechPicks, expanded, closed,
@@ -350,11 +350,14 @@ function tagList(state: State): string {
 
 // Several mechanics: fetch every strategy the server narrows to (up to 500) and keep the rows
 // whose constellations include the other picked mechanics too; paging then happens locally.
-async function loadAll(q: Query, extra: string[]) {
+async function loadAll(q: Query, extra: string[], gen: number) {
   const first = await strategyApi<LeaderboardData>('leaderboard', { ...q, sort: sort.value, limit: String(BIG_PAGE), offset: '0' });
   const items = [...first.data.items];
   const total = Math.min(first.data.total, MAX_STRATEGIES);
   for (let offset = BIG_PAGE; offset < total; offset += BIG_PAGE) {
+    // A short gap between pages, and no more of them once the filters changed or the tab closed.
+    await new Promise(r => setTimeout(r, PAGE_GAP_MS));
+    if (gen !== generation) throw new Error('This load was replaced');
     const next = await strategyApi<LeaderboardData>('leaderboard', { ...q, sort: sort.value, limit: String(BIG_PAGE), offset: String(offset) });
     items.push(...next.data.items);
   }
@@ -369,6 +372,7 @@ function filterQuery(): Query {
   return { stage: stage.value, minCount: String(minCount.value), tags: tagList('in'), excludeTags: tagList('out') };
 }
 
+const PAGE_GAP_MS = 300;
 let generation = 0;
 let unmounted = false;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -391,7 +395,7 @@ async function load(opts: { boardOnly?: boolean } = {}) {
     const withTags = !opts.boardOnly;
     const [b, t, base] = await Promise.all([
       extra.length
-        ? loadAll(q, extra)
+        ? loadAll(q, extra, gen)
         : strategyApi<LeaderboardData>('leaderboard', { ...q, sort: sort.value, limit: String(PAGE_SIZE), offset: String((page.value - 1) * PAGE_SIZE) }),
       withTags ? strategyApi<TagsData>('tags', q) : null,
       withTags ? strategyApi<TagsData>('tags', { stage: stage.value, minCount: String(minCount.value) }) : null,
@@ -461,9 +465,13 @@ async function loadStages(): Promise<boolean> {
 
 async function nameCostItems(t: TagsData) {
   const ids = [...new Set([...(t.filters.costItem?.items ?? []).map(i => i.key), ...Object.keys(picks)])];
-  const info = await itemInfo(ids);
+  // Logged by itemInfo. The filters list only named items, so a failure still gives each a name.
+  const info = await itemInfo(ids).catch(() => new Map<string, ItemInfo>());
   const m = new Map(itemNames.value);
-  ids.forEach(id => m.set(id, info.get(id)?.name || `Item ${id}`));
+  ids.forEach(id => {
+    const name = info.get(id)?.name;
+    if (name || !m.has(id)) m.set(id, name || `Item ${id}`);
+  });
   itemNames.value = m;
 }
 

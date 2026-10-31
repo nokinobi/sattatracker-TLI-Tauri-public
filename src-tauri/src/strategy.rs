@@ -280,6 +280,11 @@ async fn fetch(endpoint: &str, params: &[(String, String)], what: &str) -> Resul
     Err(last_err)
 }
 
+/// The saved answer to show when the server fails, unless it is too old to be of use.
+fn fallback<'a>(cache: &'a HashMap<String, Entry>, key: &str) -> Option<&'a Entry> {
+    cache.get(key).filter(|e| e.at.elapsed() < STALE_KEEP)
+}
+
 /// GET one of the strategy endpoints. Returns `{ data, fetchedAt, stale }`;
 /// a stale copy is served when the server fails but an older answer is cached.
 #[tauri::command]
@@ -327,7 +332,7 @@ pub async fn strategy_api(
         }
         Err(err) => {
             let cache = CACHE.lock().unwrap();
-            match cache.get(&key) {
+            match fallback(&cache, &key) {
                 Some(e) => {
                     crate::applog::warn(
                         "strategy",
@@ -435,6 +440,16 @@ mod tests {
         make_room(&mut c, "new", 10);
         assert!(!c.contains_key("old"));
         assert!(c.contains_key("recent"));
+    }
+
+    #[test]
+    fn failed_requests_only_fall_back_on_recent_answers() {
+        let mut c = HashMap::new();
+        c.insert("old".to_string(), entry(STALE_KEEP.as_secs() + 1, 10));
+        c.insert("recent".to_string(), entry(STALE_KEEP.as_secs() - 60, 10));
+        assert!(fallback(&c, "old").is_none());
+        assert!(fallback(&c, "recent").is_some());
+        assert!(fallback(&c, "missing").is_none());
     }
 
     #[test]
