@@ -62,7 +62,7 @@ Click a strategy to open it. The header shows:
 - **Cost per map:** each item used, how many per map, its price and FE.
 - **Strategy loot:** every item dropped in the strategy's maps, shown per map: how often it drops (`1 in 98 maps`, `2.3 / map`) and its FE per map. **Total** is how many dropped across all the strategy's maps, which shows how much a rate like `1 in 98 maps` is based on. **Rare drops** lists the lucky ones only: items found in fewer than one of five maps that are still worth something. Click a column header to sort; click again to reverse.
 - **Leave loot out of the profit:** to see a strategy without its lucky drops, click the minus button at the end of a loot row, or **Exclude all rare** in the Rare drops view. **Excluded** lists what you left out.
-  - Loot per map, Profit per map and Profit per hour recalculate at once, here and in the top strip, which says `without 2 excluded items`. **Count all** brings everything back.
+  - A line under Loot per map shows what's left out (`Without 2 excluded items  −85`), and Profit per map and Profit per hour recalculate at once, here and in the top strip, which says `without 2 excluded items`. **Count all** brings everything back.
   - The change against the reported rate still compares with the full reported number, because the server reports totals only. The ladder keeps its reported numbers too.
   - Exclusions are saved per strategy and period, so they're still there after closing F6 or restarting.
 

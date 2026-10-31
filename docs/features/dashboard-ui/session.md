@@ -36,6 +36,7 @@ The pencil on an expense or loot row of a finished map sets your own price per i
 - The map's **Profit**, **Loot** and **Cost**, and the session's totals and Loot view, follow the edit. The item's price anywhere else doesn't change. For a price that applies everywhere for a limited time, use [manual prices](prices.md#manual-prices).
 - The chart keeps the prices recorded during the run, because it stores only the running total.
 - The running map can't be edited yet: its values change with every drop. Edit it once it has ended.
+- With **Apply market tax** on, recorded drop prices are after tax, so enter yours after tax too; the editor reminds you. Expenses aren't taxed.
 - Each map stores its 80 most valuable drops, so very cheap items beyond that have no row to edit.
 - Edits are saved with the map and go away when the map or session is deleted.
 

@@ -156,6 +156,7 @@
                 :was="d.originalPrice"
                 :editable="!selected.live"
                 :editing="editing === 'd:' + d.item_id"
+                :after-tax="store.applyTax"
                 @edit="editing = 'd:' + d.item_id"
                 @cancel="editing = ''"
                 @apply="setPrice('drop', d.item_id, $event)"

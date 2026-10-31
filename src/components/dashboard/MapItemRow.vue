@@ -24,7 +24,7 @@
       <label class="fld">Price
         <input ref="input" v-model="text" class="mono" type="text" inputmode="decimal" maxlength="12" aria-label="Price per item for this map" @focus="($event.target as HTMLInputElement).select()" /> FE each
       </label>
-      <span class="hint">Only this map. The item's price everywhere else doesn't change.</span>
+      <span class="hint">Only this map. The item's price everywhere else doesn't change.{{ afterTax ? ' Enter the price after market tax, like the recorded one.' : '' }}</span>
       <button class="dash-btn small primary push" type="submit">Apply</button>
       <button class="dash-btn small" type="button" @click="$emit('cancel')">Cancel</button>
       <span v-if="error" class="err" role="alert">{{ error }}</span>
@@ -49,6 +49,7 @@ const props = defineProps<{
   was?: number;
   editable: boolean;
   editing: boolean;
+  afterTax?: boolean;
 }>();
 const emit = defineEmits<{ edit: []; revert: []; cancel: []; apply: [price: number] }>();
 

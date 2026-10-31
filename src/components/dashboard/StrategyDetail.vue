@@ -76,7 +76,7 @@
       <div class="sd-side dash-scroll">
         <div class="today">
           <div class="dash-label accent">Same run at today's prices</div>
-          <div class="line"><span>Loot per map</span><span class="mono gold">{{ fmtFE(perMap.loot) }}</span></div>
+          <div class="line"><span>Loot per map</span><span class="mono gold">{{ fmtFE(perMap.gross) }}</span></div>
           <div v-if="excludedRows.length" class="line without">
             <span>Without {{ excludedLabel }} <button class="sd-link" @click="clearExcluded">Count all</button></span>
             <span class="mono">{{ fmtFE(-excludedValue) }}</span>
@@ -268,8 +268,7 @@ const allRareOut = computed(() => {
 });
 
 function saveExcluded(next: Set<string>) {
-  excluded.value = next;
-  setExcluded(props.stage, props.row.key, next);
+  excluded.value = setExcluded(props.stage, props.row.key, next);
 }
 
 function toggleExcluded(id: string) {
@@ -300,9 +299,10 @@ const shownLoot = computed(() => {
 });
 
 const perMap = computed(() => {
-  const l = loot.value.reduce((s, r) => s + r.total, 0) - excludedValue.value;
+  const gross = loot.value.reduce((s, r) => s + r.total, 0);
+  const l = gross - excludedValue.value;
   const c = perMapRows(detail.value?.items.cost ?? []).reduce((s, r) => s + r.total, 0);
-  return { loot: l, cost: c, profit: l - c };
+  return { gross, cost: c, profit: l - c };
 });
 
 const hoursPerMap = computed(() => Math.max(1, props.row.avgDuration) / 3_600_000);

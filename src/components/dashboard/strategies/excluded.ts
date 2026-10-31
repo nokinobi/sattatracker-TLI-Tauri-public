@@ -5,7 +5,8 @@ import { computed, reactive } from 'vue';
 
 const KEY = 'tli_strategy_excluded';
 const MAX_STRATEGIES = 500;
-const MAX_ITEMS = 300;
+// More than any strategy's loot list.
+const MAX_ITEMS = 2000;
 
 const id = (stage: string, strategyKey: string) => `${stage}|${strategyKey}`;
 
@@ -42,9 +43,11 @@ export function excludedFor(stage: string, strategyKey: string): Set<string> {
 // Nothing already saved is dropped to make room: a full list just takes no new strategies.
 export const excludedFull = computed(() => Object.keys(all).length >= MAX_STRATEGIES);
 
-export function setExcluded(stage: string, strategyKey: string, items: Set<string>) {
+// Returns what was saved, which is what the profit must use.
+export function setExcluded(stage: string, strategyKey: string, items: Set<string>): Set<string> {
   const k = id(stage, strategyKey);
   if (items.size === 0) delete all[k];
   else if (all[k] || !excludedFull.value) all[k] = [...items].slice(0, MAX_ITEMS);
   save();
+  return excludedFor(stage, strategyKey);
 }
