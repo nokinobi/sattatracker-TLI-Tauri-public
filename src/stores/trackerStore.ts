@@ -39,6 +39,9 @@ export interface InventorySnapshotItem {
   price:     number;
 }
 
+// Amounts the Compact Window's high-value slider steps through. 0 turns marking and effects off.
+export const COMPACT_THRESHOLD_STEPS = [0, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
+
 export interface LootItem {
   item_id: string;
   item_name: string;
@@ -516,9 +519,13 @@ export const useTrackerStore = defineStore('tracker', {
         if (parsed.dropFxStyle) this.dropFxStyle = parsed.dropFxStyle;
         if (parsed.extraFxStyle) this.extraFxStyle = parsed.extraFxStyle;
         if (typeof parsed.widgetOpacity === 'number') this.widgetOpacity = parsed.widgetOpacity;
-        if (typeof parsed.compactWindowOpacity === 'number') this.compactWindowOpacity = parsed.compactWindowOpacity;
-        if (typeof parsed.compactWindowFontScale === 'number') this.compactWindowFontScale = parsed.compactWindowFontScale;
-        if (typeof parsed.compactHighValueThreshold === 'number') this.compactHighValueThreshold = parsed.compactHighValueThreshold;
+        if (Number.isFinite(parsed.compactWindowOpacity)) this.compactWindowOpacity = Math.min(1, Math.max(0.3, parsed.compactWindowOpacity));
+        if (Number.isFinite(parsed.compactWindowFontScale)) this.compactWindowFontScale = Math.min(1.5, Math.max(0.8, parsed.compactWindowFontScale));
+        if (Number.isFinite(parsed.compactHighValueThreshold)) {
+          // The nearest slider step, so the label always matches what the drop check uses.
+          this.compactHighValueThreshold = COMPACT_THRESHOLD_STEPS.reduce((best, step) =>
+            (Math.abs(step - parsed.compactHighValueThreshold) < Math.abs(best - parsed.compactHighValueThreshold) ? step : best));
+        }
         if (['glow', 'pop', 'both', 'off'].includes(parsed.compactHighValueEffect)) this.compactHighValueEffect = parsed.compactHighValueEffect;
         if (typeof parsed.fxDuration === 'number') this.fxDuration = parsed.fxDuration;
         if (typeof parsed.fxX === 'number') this.fxX = parsed.fxX;
