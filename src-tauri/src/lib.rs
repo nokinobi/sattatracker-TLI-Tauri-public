@@ -91,23 +91,23 @@ fn get_price_status() -> PriceStatus {
 #[tauri::command]
 fn get_all_prices() -> Vec<PriceEntry> {
     let overrides = crate::pricing::active_overrides();
-    let mut entries: Vec<PriceEntry> = crate::pricing::get_all_cached_prices()
-        .into_iter()
-        .filter(|(id, p)| *p > 0.0 || overrides.contains_key(id))
-        .map(|(id, market_price)| {
-            let item_name = crate::db::DbManager::get_item_name(&id);
-            let item_type = crate::db::DbManager::get_item_type(&id);
-            let manual = overrides.get(&id);
-            PriceEntry {
-                price: manual.map_or(market_price, |o| o.price),
-                override_until_ms: manual.map(|o| o.until_ms),
-                item_id: id,
-                item_name,
-                item_type,
-                market_price,
-            }
-        })
-        .collect();
+    let mut entries: Vec<PriceEntry> =
+        crate::pricing::listed_prices(crate::pricing::get_all_cached_prices(), &overrides)
+            .into_iter()
+            .map(|(id, market_price)| {
+                let item_name = crate::db::DbManager::get_item_name(&id);
+                let item_type = crate::db::DbManager::get_item_type(&id);
+                let manual = overrides.get(&id);
+                PriceEntry {
+                    price: manual.map_or(market_price, |o| o.price),
+                    override_until_ms: manual.map(|o| o.until_ms),
+                    item_id: id,
+                    item_name,
+                    item_type,
+                    market_price,
+                }
+            })
+            .collect();
     entries.sort_by(|a, b| {
         b.price
             .partial_cmp(&a.price)

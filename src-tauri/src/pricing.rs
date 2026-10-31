@@ -78,6 +78,27 @@ pub fn active_overrides() -> HashMap<String, PriceOverride> {
         .collect()
 }
 
+/// The items the Prices tab lists, with their market price: everything with a price, plus manual
+/// prices the market table doesn't hold (right after a start, or after a refresh dropped the item),
+/// so they can always be seen and reset.
+pub fn listed_prices(
+    market: Vec<(String, f64)>,
+    overrides: &HashMap<String, PriceOverride>,
+) -> Vec<(String, f64)> {
+    let mut rows: Vec<(String, f64)> = market
+        .into_iter()
+        .filter(|(id, p)| *p > 0.0 || overrides.contains_key(id))
+        .collect();
+    let known: std::collections::HashSet<String> = rows.iter().map(|(id, _)| id.clone()).collect();
+    rows.extend(
+        overrides
+            .keys()
+            .filter(|id| !known.contains(*id))
+            .map(|id| (id.clone(), 0.0)),
+    );
+    rows
+}
+
 fn parse_overrides(text: &str, now: i64) -> HashMap<String, PriceOverride> {
     let raw: HashMap<String, PriceOverride> = serde_json::from_str(text).unwrap_or_default();
     raw.into_iter()
@@ -528,6 +549,27 @@ mod tests {
         set_override(id, 100.0, 30).unwrap();
         clear_override(id);
         assert_eq!(manager().get_price_sync(id), 9.0);
+    }
+
+    #[test]
+    fn manual_prices_are_listed_without_a_market_price() {
+        let manual = PriceOverride { price: 5.0, until_ms: i64::MAX };
+        let overrides = HashMap::from([("gone".to_string(), manual), ("free".to_string(), manual)]);
+        let market = vec![
+            ("priced".to_string(), 2.0),
+            ("free".to_string(), 0.0),
+            ("unpriced".to_string(), 0.0),
+        ];
+        let mut rows = listed_prices(market, &overrides);
+        rows.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            rows,
+            vec![
+                ("free".to_string(), 0.0),
+                ("gone".to_string(), 0.0),
+                ("priced".to_string(), 2.0),
+            ]
+        );
     }
 
     #[test]

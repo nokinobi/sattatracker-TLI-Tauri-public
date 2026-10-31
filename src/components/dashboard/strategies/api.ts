@@ -51,19 +51,28 @@ export async function strategyApi<T>(endpoint: 'stage-options' | 'leaderboard' |
 }
 
 // Details are fetched one by one with a short gap so a page of rows doesn't
-// burst the server's rate limit; results are kept for the life of the window.
-const details = new Map<string, Promise<DetailData | null>>();
+// burst the server's rate limit. Results are kept as long as the backend's own cache keeps a
+// detail, so reopening a strategy later gets a current one; the oldest go first past the limit.
+const DETAIL_KEEP_MS = 30 * 60 * 1000;
+const MAX_DETAILS = 300;
+const details = new Map<string, { at: number; promise: Promise<DetailData | null> }>();
 let queue: Promise<unknown> = Promise.resolve();
 
 export function fetchDetail(stage: string, strategyKey: string): Promise<DetailData | null> {
   const id = `${stage}:${strategyKey}`;
   const known = details.get(id);
-  if (known) return known;
-  const p = queue.then(async () => {
+  if (known && Date.now() - known.at < DETAIL_KEEP_MS) return known.promise;
+  details.delete(id);
+  if (details.size >= MAX_DETAILS) {
+    const oldest = details.keys().next().value;
+    if (oldest !== undefined) details.delete(oldest);
+  }
+  const p: Promise<DetailData | null> = queue.then(async () => {
     try {
       return (await strategyApi<DetailData>('detail', { stage, strategyKey })).data;
     } catch (e) {
-      details.delete(id);
+      // A newer request for this strategy may have taken the place by now.
+      if (details.get(id)?.promise === p) details.delete(id);
       console.warn('Strategy detail failed', e);
       logEvent('warn', `detail ${strategyKey} gave up: ${String(e)}`);
       return null;
@@ -72,7 +81,7 @@ export function fetchDetail(stage: string, strategyKey: string): Promise<DetailD
     }
   });
   queue = p;
-  details.set(id, p);
+  details.set(id, { at: Date.now(), promise: p });
   return p;
 }
 
