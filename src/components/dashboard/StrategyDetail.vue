@@ -217,13 +217,18 @@ onUnmounted(() => {
 });
 
 onMounted(async () => {
-  const d = await fetchDetail(props.stage, props.row.key);
-  if (!d) {
+  try {
+    const d = await fetchDetail(props.stage, props.row.key);
+    if (!d) {
+      failed.value = true;
+      return;
+    }
+    info.value = new Map(await itemInfo([...d.items.cost, ...d.items.loot].map(i => i.id)));
+    detail.value = d;
+  } catch (e) {
+    console.warn('Could not show the strategy', e);
     failed.value = true;
-    return;
   }
-  info.value = new Map(await itemInfo([...d.items.cost, ...d.items.loot].map(i => i.id)));
-  detail.value = d;
 });
 
 const title = computed(() => treeList(props.row.talentLabel) || 'No main talent');

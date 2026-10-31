@@ -638,6 +638,8 @@ onMounted(async () => {
   if (await loadStages()) void load();
 });
 onUnmounted(() => {
+  // A load still running drops out instead of starting a retry for a tab that's gone.
+  generation++;
   if (ticker) clearInterval(ticker);
   if (debounce) clearTimeout(debounce);
   if (retryTimer) clearTimeout(retryTimer);

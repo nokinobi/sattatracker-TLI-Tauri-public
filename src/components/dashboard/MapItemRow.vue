@@ -20,7 +20,7 @@
         <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2.5l2.5 2.5L6 12.5l-3.2.7.7-3.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
       </button>
     </div>
-    <form v-if="editing" class="mi-edit" @submit.prevent="apply" @keydown.esc="$emit('cancel')">
+    <form v-if="editing" class="mi-edit" @submit.prevent="apply" @keydown.esc.stop="$emit('cancel')">
       <label class="fld">Price
         <input ref="input" v-model="text" class="mono" type="text" inputmode="decimal" maxlength="12" aria-label="Price per item for this map" @focus="($event.target as HTMLInputElement).select()" /> FE each
       </label>
