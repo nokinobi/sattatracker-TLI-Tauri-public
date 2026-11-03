@@ -19,6 +19,8 @@ The right side of the toolbar shows the number of maps, profit, profit per hour 
 
 The maps of the selection, newest first. Each row has a green or red edge for profit or loss (blue for the running map, marked `LIVE`), the map's start time and duration, item count and cost.
 
+The game doesn't log what is already in the bag, so after the tracker starts it learns each stack the first time that stack changes. That first change isn't counted as loot. For example, the first Flame Elementium picked up into an existing stack is missed, but the stack itself is never counted. A stack that appears in a new slot is counted in full.
+
 Selecting a map shows:
 
 - **Time**, **Profit** (green or red), **Loot** value (gold) and **Cost** (red when the map cost something).

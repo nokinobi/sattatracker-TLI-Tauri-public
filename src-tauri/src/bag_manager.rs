@@ -46,13 +46,11 @@ impl BagManager {
         let key = Self::key(page_id, slot_id);
 
         let delta = match self.slots.get(&key) {
-            None => {
-                if qty > 0 {
-                    SlotDelta::Gained(item_id.to_string(), qty)
-                } else {
-                    SlotDelta::None
-                }
-            }
+            // A slot the tracker hasn't seen yet: the game no longer logs the bag's contents at
+            // login, so after starting the tracker every existing stack is unknown until it
+            // changes. Its new size is only the starting point; counting it would add the whole
+            // stack as loot. New stacks come as `ItemChange@ Add` and are counted there.
+            None => SlotDelta::None,
             Some(old) if old.item_id == item_id => {
                 if qty > old.qty {
                     SlotDelta::Gained(item_id.to_string(), qty - old.qty)
@@ -141,5 +139,35 @@ impl BagManager {
 
     pub fn is_main_inventory(page_id: u32) -> bool {
         (100..=104).contains(&page_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_unknown_stack_is_a_starting_point_not_loot() {
+        let mut bag = BagManager::new();
+        assert!(matches!(bag.update_slot(102, 0, "100300", 3707), SlotDelta::None));
+        assert!(matches!(
+            bag.update_slot(102, 0, "100300", 3709),
+            SlotDelta::Gained(ref id, 2) if id == "100300"
+        ));
+        assert!(matches!(
+            bag.update_slot(102, 0, "100300", 3700),
+            SlotDelta::Lost(ref id, 9) if id == "100300"
+        ));
+    }
+
+    #[test]
+    fn a_known_slot_still_counts_its_first_change() {
+        let mut bag = BagManager::new();
+        bag.init_slot(103, 5, "6002", 10);
+        assert!(matches!(bag.update_slot(103, 5, "6002", 12), SlotDelta::Gained(_, 2)));
+        assert!(matches!(
+            bag.update_slot(103, 5, "6004", 3),
+            SlotDelta::Swapped { new_qty: 3, .. }
+        ));
     }
 }
