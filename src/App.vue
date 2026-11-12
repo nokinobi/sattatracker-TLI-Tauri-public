@@ -130,6 +130,8 @@
           @widgetClick="isHistoryOpen = true"
           :defaultPosition="{ x: 610, y: 500 }" />
 
+        <CompactWindow />
+
         <ItemsHistory :isOpen="isHistoryOpen" @close="isHistoryOpen = false" />
 
         <MapHistory :isOpen="isMapHistoryOpen" @close="isMapHistoryOpen = false" />
@@ -171,6 +173,7 @@ import MapTimer             from './components/MapTimer.vue';
 import MapExpense           from './components/MapExpense.vue';
 import ControlPanel         from './components/ControlPanel.vue';
 import LootFeed             from './components/LootFeed.vue';
+import CompactWindow        from './components/CompactWindow.vue';
 import ItemsHistory         from './components/ItemsHistory.vue';
 import MapHistory           from './components/MapHistory.vue';
 import DashboardWindow      from './components/dashboard/DashboardWindow.vue';

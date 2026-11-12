@@ -184,6 +184,7 @@ onUnmounted(() => {
 });
 
 const widgetToggles: Record<string, string> = {
+  compactWindow:    'Compact Window',
   controlPanel:     'Control Panel',
   lootFeedSession:  'Loot Feed (Session)',
   lootFeedMap:      'Loot Feed (Map)',
