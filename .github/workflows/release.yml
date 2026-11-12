@@ -21,11 +21,40 @@ jobs:
 
       - run: npm ci
 
+      # Fork release rules (docs/release/RELEASING.md):
+      # - the app version comes from the tag and is set at build time, so the original
+      #   project's version files stay untouched;
+      # - only vX.0.Z with X >= 1 is a normal release, everything else is a pre-release;
+      # - the release description is docs/release/versions/<version>.md.
+      - id: meta
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME is not vX.Y.Z"
+            exit 1
+          fi
+          version="${GITHUB_REF_NAME#v}"
+          if [ "${BASH_REMATCH[1]}" -ge 1 ] && [ "${BASH_REMATCH[2]}" -eq 0 ]; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+          printf '{ "version": "%s" }\n' "$version" > "$RUNNER_TEMP/tauri-version.json"
+          echo "config=$RUNNER_TEMP/tauri-version.json" >> "$GITHUB_OUTPUT"
+          notes="docs/release/versions/$version.md"
+          {
+            echo 'body<<RELEASE_NOTES_EOF'
+            if [ -f "$notes" ]; then cat "$notes"; else echo "Release $GITHUB_REF_NAME"; fi
+            echo 'RELEASE_NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          args: --config ${{ steps.meta.outputs.config }}
           tagName: ${{ github.ref_name }}
           releaseName: ${{ github.ref_name }}
+          releaseBody: ${{ steps.meta.outputs.body }}
           releaseDraft: false
-          prerelease: false
+          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}

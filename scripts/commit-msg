@@ -1,0 +1,22 @@
+#!/bin/sh
+# Git commit-msg hook: rejects commit messages that don't follow Conventional Commits.
+# Install: cmd /c "git show origin/fork/release-config:scripts/commit-msg > .git\hooks\commit-msg"
+# See docs/release/RELEASING.md, "Commit messages".
+
+subject=$(grep -v '^#' "$1" | head -n 1)
+
+# Merges, reverts and fixups that git writes itself are exempt.
+case "$subject" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *) exit 0 ;;
+esac
+
+if printf '%s' "$subject" | grep -Eq '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: [^ ].*'; then
+  exit 0
+fi
+
+echo "Commit message does not follow Conventional Commits:" >&2
+echo "  $subject" >&2
+echo "Use: type(optional-scope): description" >&2
+echo "Types: feat fix docs style refactor perf test build ci chore revert" >&2
+echo "Example: fix(release): reject duplicate features" >&2
+exit 1
