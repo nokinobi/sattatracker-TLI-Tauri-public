@@ -48,6 +48,8 @@ export interface LootItem {
   qty: number;
   price: number;
   timestamp: number;
+  // Picked into the gear page; kept without a price so it can be priced by hand.
+  gear?: boolean;
 }
 
 export interface ExpenseItem {
@@ -386,7 +388,7 @@ export const useTrackerStore = defineStore('tracker', {
 
       const totalValue = Math.round(effectivePrice * item.qty * 100) / 100;
 
-      if (totalValue < this.minPriceThreshold) return;
+      if (totalValue < this.minPriceThreshold && !item.gear) return;
 
       const taxedItem: LootItem = { ...item, price: effectivePrice };
 
