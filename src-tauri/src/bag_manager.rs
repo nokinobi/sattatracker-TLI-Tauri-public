@@ -46,10 +46,11 @@ impl BagManager {
         let key = Self::key(page_id, slot_id);
 
         let delta = match self.slots.get(&key) {
-            // A slot the tracker hasn't seen yet: the game no longer logs the bag's contents at
-            // login, so after starting the tracker every existing stack is unknown until it
-            // changes. Its new size is only the starting point; counting it would add the whole
-            // stack as loot. New stacks come as `ItemChange@ Add` and are counted there.
+            // A slot the tracker hasn't seen yet. The game logs the bag's contents
+            // (`InitBagData`) when the character logs in, so a tracker started or restarted after
+            // that knows no stacks until they change. Its new size is only the starting point;
+            // counting it would add the whole stack as loot. New stacks come as `ItemChange@ Add`
+            // and are counted there.
             None => SlotDelta::None,
             Some(old) if old.item_id == item_id => {
                 if qty > old.qty {
