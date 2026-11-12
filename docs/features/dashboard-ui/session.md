@@ -19,7 +19,7 @@ The right side of the toolbar shows the number of maps, profit, profit per hour 
 
 The maps of the selection, newest first. Each row has a green or red edge for profit or loss (blue for the running map, marked `LIVE`), the map's start time and duration, item count and cost.
 
-The game doesn't log what is already in the bag, so after the tracker starts it learns each stack the first time that stack changes. That first change isn't counted as loot. For example, the first Flame Elementium picked up into an existing stack is missed, but the stack itself is never counted. A stack that appears in a new slot is counted in full.
+The game writes what is in the bag to its log at login and after a bag sort, and the tracker reads that log when it starts. Sometimes the log has no such list (it happened once in testing). Then the tracker learns each stack the first time that stack changes, and that first change isn't counted as loot; sorting the bag gives it the full list again. For example, the first Flame Elementium picked up into an existing stack is missed, but the stack itself is never counted. A stack that appears in a new slot is counted in full.
 
 Drops worth less than the minimum price in the overlay settings are left out, except gear. Picked-up gear (the Gear page of the bag: weapons, armour, jewellery, including uniques) has no market price, so it is kept with `no price` and adds nothing to profit. Use the pencil to set what it's worth. The game log names only the gear's base type, such as `Shaman's Necklace`, so a unique and a normal item of that type look the same.
 
