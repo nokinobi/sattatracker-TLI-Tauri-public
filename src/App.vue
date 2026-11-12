@@ -282,6 +282,7 @@ onMounted(async () => {
           qty:       e.qty,
           price:     e.price,
           timestamp: Date.now(),
+          gear:      e.gear === true,
         });
         break;
       case 'ZoneChange':

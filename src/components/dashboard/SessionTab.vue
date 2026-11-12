@@ -148,7 +148,7 @@
                 :key="d.item_id"
                 :item-id="d.item_id"
                 :name="d.item_name"
-                :detail="`x${d.qty} @ ${fmtPrice(d.price)} · ${d.share.toFixed(0)}% of loot`"
+                :detail="`x${d.qty} ${d.price > 0 ? `@ ${fmtPrice(d.price)}` : '· no price'} · ${d.share.toFixed(0)}% of loot`"
                 :value="fmtValue(d.value)"
                 tone="gold"
                 :unit="d.price"
@@ -201,7 +201,7 @@
             <span class="dash-icon"><img :src="getIcon(d.item_id)" alt="" @error="($event.target as HTMLImageElement).style.visibility = 'hidden'" /></span>
             <span class="name">
               <span>{{ d.item_name }}</span>
-              <small>{{ d.type ? `${d.type} · ` : '' }}x{{ d.qty }} @ {{ fmtPrice(d.shownUnit) }}{{ d.mixed ? ' on average' : '' }}{{ d.maps ? ` · dropped in ${d.maps} ${d.maps === 1 ? 'map' : 'maps'}` : '' }}<template v-if="d.was !== undefined"> · <b>edited, was {{ fmtPrice(d.was) }}</b><template v-if="d.unchanged > 0"> · {{ d.unchanged }} at the recorded price</template></template></small>
+              <small>{{ d.type ? `${d.type} · ` : '' }}x{{ d.qty }} {{ d.shownUnit > 0 ? `@ ${fmtPrice(d.shownUnit)}` : '· no price' }}{{ d.mixed ? ' on average' : '' }}{{ d.maps ? ` · dropped in ${d.maps} ${d.maps === 1 ? 'map' : 'maps'}` : '' }}<template v-if="d.was !== undefined"> · <b>edited, was {{ fmtPrice(d.was) }}</b><template v-if="d.unchanged > 0"> · {{ d.unchanged }} at the recorded price</template></template></small>
             </span>
             <span class="bar"><span><i :style="{ width: d.bar + '%' }"></i></span><b class="mono">{{ d.share.toFixed(0) }}%</b></span>
             <span :class="['mono', 'r', d.was !== undefined ? 'accent' : 'gold']">{{ fmtValue(d.value) }} FE</span>

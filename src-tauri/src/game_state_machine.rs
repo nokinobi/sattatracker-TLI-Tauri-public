@@ -19,6 +19,9 @@ const TRADE_PROTO_NAMES: &[&str] = &[
 
 const SORT_PROTO_NAMES: &[&str] = &["ResetItemsLayout", "SortBag", "InventorySort"];
 
+// The bag page that holds gear (weapons, armour, jewellery).
+const GEAR_PAGE: i32 = 100;
+
 const TRADE_UI_PAGES: &[&str] = &[
     "TradeHouse",
     "Auction",
@@ -309,24 +312,12 @@ impl GameStateMachine {
                 return vec![];
             }
             let price = pricing.get_price_sync(item_id);
-            let item_name = crate::db::DbManager::get_item_name(item_id);
-            return vec![GameEvent::LootDrop {
-                item_id: item_id.to_string(),
-                item_name,
-                qty,
-                price,
-            }];
+            return vec![Self::loot_drop(item_id, qty, price, page_id)];
         }
 
         if matches!(self.state, GameState::InMap { .. }) && is_loot_context {
             let price = pricing.get_price_sync(item_id);
-            let item_name = crate::db::DbManager::get_item_name(item_id);
-            return vec![GameEvent::LootDrop {
-                item_id: item_id.to_string(),
-                item_name,
-                qty,
-                price,
-            }];
+            return vec![Self::loot_drop(item_id, qty, price, page_id)];
         }
         vec![]
     }
@@ -349,6 +340,16 @@ impl GameStateMachine {
         }
     }
 
+    fn loot_drop(item_id: &str, qty: u32, price: f64, page_id: i32) -> GameEvent {
+        GameEvent::LootDrop {
+            item_id: item_id.to_string(),
+            item_name: crate::db::DbManager::get_item_name(item_id),
+            qty,
+            price,
+            gear: page_id == GEAR_PAGE,
+        }
+    }
+
     fn handle_gain(
         &mut self,
         item_id: &str,
@@ -366,26 +367,14 @@ impl GameStateMachine {
                     return vec![];
                 }
                 let price = pricing.get_price_sync(item_id);
-                let item_name = crate::db::DbManager::get_item_name(item_id);
-                return vec![GameEvent::LootDrop {
-                    item_id: item_id.to_string(),
-                    item_name,
-                    qty,
-                    price,
-                }];
+                return vec![Self::loot_drop(item_id, qty, price, page_id as i32)];
             }
             EventContext::Pickup => {
                 if !matches!(self.state, GameState::InMap { .. }) {
                     return vec![];
                 }
                 let price = pricing.get_price_sync(item_id);
-                let item_name = crate::db::DbManager::get_item_name(item_id);
-                return vec![GameEvent::LootDrop {
-                    item_id: item_id.to_string(),
-                    item_name,
-                    qty,
-                    price,
-                }];
+                return vec![Self::loot_drop(item_id, qty, price, page_id as i32)];
             }
             _ => vec![],
         }
@@ -478,4 +467,17 @@ fn now_secs() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gear_drops_are_marked_so_they_are_kept_without_a_price() {
+        let gear = GameStateMachine::loot_drop("4533", 1, 0.0, 100);
+        assert!(matches!(gear, GameEvent::LootDrop { gear: true, qty: 1, .. }));
+        let stack = GameStateMachine::loot_drop("100300", 3, 1.0, 102);
+        assert!(matches!(stack, GameEvent::LootDrop { gear: false, .. }));
+    }
 }
