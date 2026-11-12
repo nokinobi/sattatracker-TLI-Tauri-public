@@ -535,7 +535,6 @@ export const useTrackerStore = defineStore('tracker', {
         if (typeof parsed.pauseTimerOnHub === 'boolean') this.pauseTimerOnHub = parsed.pauseTimerOnHub;
         if (parsed.widgetPositions) {
           this.widgetPositions = { ...this.widgetPositions, ...parsed.widgetPositions };
-          delete (this.widgetPositions as any).compactMap;
         }
         if (parsed.blockedItemIds) this.blockedItemIds = parsed.blockedItemIds;
         if (typeof parsed.lowStockEnabled === 'boolean') this.lowStockEnabled = parsed.lowStockEnabled;
