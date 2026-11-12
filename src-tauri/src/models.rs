@@ -17,6 +17,9 @@ pub enum GameEvent {
         item_name: String,
         qty: u32,
         price: f64,
+        /// Picked into the gear page. Gear has no market price, so it is kept even below the
+        /// price threshold; the player can set its price by hand.
+        gear: bool,
     },
     Expense {
         item_id: String,
@@ -43,6 +46,8 @@ pub enum GameEvent {
 pub struct InventoryItem {
     pub item_id: String,
     pub item_name: String,
+    pub item_type: String,
+    pub page_id: u32,
     pub qty: u32,
     pub price: f64,
 }

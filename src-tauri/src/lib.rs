@@ -1,3 +1,4 @@
+mod applog;
 mod assets;
 mod bag_manager;
 mod db;
@@ -7,6 +8,7 @@ mod net;
 mod parser;
 mod pricing;
 mod state_store;
+mod strategy;
 mod tailer;
 mod utils;
 
@@ -65,29 +67,75 @@ fn get_cursor_position(window: tauri::Window) -> (f64, f64) {
 struct PriceEntry {
     item_id: String,
     item_name: String,
+    item_type: String,
+    /// What the tracker uses now: the manual price while one is running.
     price: f64,
+    market_price: f64,
+    override_until_ms: Option<i64>,
+}
+
+#[derive(serde::Serialize)]
+struct PriceStatus {
+    count: usize,
+    last_refresh_ms: i64,
+}
+
+#[tauri::command]
+fn get_price_status() -> PriceStatus {
+    PriceStatus {
+        count: crate::pricing::get_all_cached_prices().len(),
+        last_refresh_ms: crate::pricing::last_refresh_ms(),
+    }
 }
 
 #[tauri::command]
 fn get_all_prices() -> Vec<PriceEntry> {
-    let mut entries: Vec<PriceEntry> = crate::pricing::get_all_cached_prices()
-        .into_iter()
-        .filter(|(_, p)| *p > 0.0)
-        .map(|(id, price)| {
-            let item_name = crate::db::DbManager::get_item_name(&id);
-            PriceEntry {
-                item_id: id,
-                item_name,
-                price,
-            }
-        })
-        .collect();
+    let overrides = crate::pricing::active_overrides();
+    let mut entries: Vec<PriceEntry> =
+        crate::pricing::listed_prices(crate::pricing::get_all_cached_prices(), &overrides)
+            .into_iter()
+            .map(|(id, market_price)| {
+                let item_name = crate::db::DbManager::get_item_name(&id);
+                let item_type = crate::db::DbManager::get_item_type(&id);
+                let manual = overrides.get(&id);
+                PriceEntry {
+                    price: manual.map_or(market_price, |o| o.price),
+                    override_until_ms: manual.map(|o| o.until_ms),
+                    item_id: id,
+                    item_name,
+                    item_type,
+                    market_price,
+                }
+            })
+            .collect();
     entries.sort_by(|a, b| {
         b.price
             .partial_cmp(&a.price)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     entries
+}
+
+#[tauri::command]
+fn set_price_override(
+    window: tauri::Window,
+    item_id: String,
+    price: f64,
+    minutes: u32,
+) -> Result<i64, String> {
+    if window.label() != "main" {
+        return Err("forbidden".to_string());
+    }
+    crate::pricing::set_override(&item_id, price, minutes)
+}
+
+#[tauri::command]
+fn clear_price_override(window: tauri::Window, item_id: String) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("forbidden".to_string());
+    }
+    crate::pricing::clear_override(&item_id);
+    Ok(())
 }
 
 #[tauri::command]
@@ -125,6 +173,9 @@ pub fn run() {
                     if shortcut.matches(Modifiers::empty(), Code::F8) {
                         let _ = app.emit("toggle_edit_mode", ());
                     }
+                    if shortcut.matches(Modifiers::empty(), Code::F6) {
+                        let _ = app.emit("toggle_dashboard", ());
+                    }
                     if shortcut.matches(Modifiers::empty(), Code::F7) {
                         if let Some(window) = app.get_webview_window("main") {
                             let visible = window.is_visible().unwrap_or(true);
@@ -141,6 +192,13 @@ pub fn run() {
         )
         .setup(move |app| {
             use std::str::FromStr;
+
+            if let Ok(dir) = app.path().app_local_data_dir() {
+                applog::init(dir.join("logs"), &app.package_info().version.to_string());
+                if std::fs::create_dir_all(&dir).is_ok() {
+                    pricing::init_overrides(dir.join("price_overrides.json"));
+                }
+            }
             use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
             use tauri::menu::{Menu, MenuItem};
@@ -163,6 +221,9 @@ pub fn run() {
                 let _ = app.global_shortcut().register(shortcut);
             }
             if let Ok(shortcut) = Shortcut::from_str("F7") {
+                let _ = app.global_shortcut().register(shortcut);
+            }
+            if let Ok(shortcut) = Shortcut::from_str("F6") {
                 let _ = app.global_shortcut().register(shortcut);
             }
 
@@ -216,8 +277,14 @@ pub fn run() {
             get_log_path,
             get_cursor_position,
             get_all_prices,
+            get_price_status,
+            set_price_override,
+            clear_price_override,
             state_store::save_state,
             state_store::load_state,
+            strategy::strategy_api,
+            applog::log_event,
+            strategy::get_item_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
