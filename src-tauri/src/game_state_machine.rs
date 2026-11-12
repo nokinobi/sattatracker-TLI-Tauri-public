@@ -19,6 +19,9 @@ const TRADE_PROTO_NAMES: &[&str] = &[
 
 const SORT_PROTO_NAMES: &[&str] = &["ResetItemsLayout", "SortBag", "InventorySort"];
 
+// Picking up loot: several stacks at once, or one item (gear, uniques included) at a time.
+const PICKUP_PROTO_NAMES: &[&str] = &["PickItems", "PickItem"];
+
 // The bag page that holds gear (weapons, armour, jewellery).
 const GEAR_PAGE: i32 = 100;
 
@@ -217,7 +220,7 @@ impl GameStateMachine {
             self.context = EventContext::MapOpen;
         } else if TRADE_PROTO_NAMES.contains(&proto_name) {
             self.context = EventContext::TradeHouse;
-        } else if proto_name == "PickItems" {
+        } else if PICKUP_PROTO_NAMES.contains(&proto_name) {
             self.context = EventContext::Pickup;
         } else {
             self.context = EventContext::Normal;
@@ -340,15 +343,15 @@ impl GameStateMachine {
         }
     }
 
-    // Only gear picked up is kept without a price; gear bought or returned in the trade house
-    // still has to clear the minimum price like any other item.
+    // Only gear picked up is kept without a price. Gear bought or returned in the trade house, or
+    // moved and unequipped in a map, still has to clear the minimum price like any other item.
     fn loot_drop(&self, item_id: &str, qty: u32, price: f64, page_id: i32) -> GameEvent {
         GameEvent::LootDrop {
             item_id: item_id.to_string(),
             item_name: crate::db::DbManager::get_item_name(item_id),
             qty,
             price,
-            gear: page_id == GEAR_PAGE && self.context != EventContext::TradeHouse,
+            gear: page_id == GEAR_PAGE && self.context == EventContext::Pickup,
         }
     }
 
@@ -491,5 +494,23 @@ mod tests {
         fsm.context = EventContext::TradeHouse;
         let bought = fsm.loot_drop("4533", 1, 0.0, 100);
         assert!(matches!(bought, GameEvent::LootDrop { gear: false, .. }));
+    }
+
+    #[test]
+    fn gear_moved_outside_a_pickup_is_not_kept_without_a_price() {
+        let mut fsm = GameStateMachine::new(AppSettings::default());
+        fsm.handle_proto_start("Unequip");
+        let moved = fsm.loot_drop("4533", 1, 0.0, 100);
+        assert!(matches!(moved, GameEvent::LootDrop { gear: false, .. }));
+    }
+
+    #[test]
+    fn a_single_pickup_counts_as_a_pickup() {
+        // Gear, uniques included, is picked up one at a time with `PickItem`.
+        let mut fsm = GameStateMachine::new(AppSettings::default());
+        fsm.handle_proto_start("PickItem");
+        assert_eq!(fsm.context, EventContext::Pickup);
+        let unique = fsm.loot_drop("4533", 1, 0.0, 100);
+        assert!(matches!(unique, GameEvent::LootDrop { gear: true, .. }));
     }
 }
