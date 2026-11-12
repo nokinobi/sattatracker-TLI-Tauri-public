@@ -312,12 +312,12 @@ impl GameStateMachine {
                 return vec![];
             }
             let price = pricing.get_price_sync(item_id);
-            return vec![Self::loot_drop(item_id, qty, price, page_id)];
+            return vec![self.loot_drop(item_id, qty, price, page_id)];
         }
 
         if matches!(self.state, GameState::InMap { .. }) && is_loot_context {
             let price = pricing.get_price_sync(item_id);
-            return vec![Self::loot_drop(item_id, qty, price, page_id)];
+            return vec![self.loot_drop(item_id, qty, price, page_id)];
         }
         vec![]
     }
@@ -340,13 +340,15 @@ impl GameStateMachine {
         }
     }
 
-    fn loot_drop(item_id: &str, qty: u32, price: f64, page_id: i32) -> GameEvent {
+    // Only gear picked up is kept without a price; gear bought or returned in the trade house
+    // still has to clear the minimum price like any other item.
+    fn loot_drop(&self, item_id: &str, qty: u32, price: f64, page_id: i32) -> GameEvent {
         GameEvent::LootDrop {
             item_id: item_id.to_string(),
             item_name: crate::db::DbManager::get_item_name(item_id),
             qty,
             price,
-            gear: page_id == GEAR_PAGE,
+            gear: page_id == GEAR_PAGE && self.context != EventContext::TradeHouse,
         }
     }
 
@@ -367,14 +369,14 @@ impl GameStateMachine {
                     return vec![];
                 }
                 let price = pricing.get_price_sync(item_id);
-                return vec![Self::loot_drop(item_id, qty, price, page_id as i32)];
+                return vec![self.loot_drop(item_id, qty, price, page_id as i32)];
             }
             EventContext::Pickup => {
                 if !matches!(self.state, GameState::InMap { .. }) {
                     return vec![];
                 }
                 let price = pricing.get_price_sync(item_id);
-                return vec![Self::loot_drop(item_id, qty, price, page_id as i32)];
+                return vec![self.loot_drop(item_id, qty, price, page_id as i32)];
             }
             _ => vec![],
         }
@@ -475,9 +477,19 @@ mod tests {
 
     #[test]
     fn gear_drops_are_marked_so_they_are_kept_without_a_price() {
-        let gear = GameStateMachine::loot_drop("4533", 1, 0.0, 100);
+        let mut fsm = GameStateMachine::new(AppSettings::default());
+        fsm.context = EventContext::Pickup;
+        let gear = fsm.loot_drop("4533", 1, 0.0, 100);
         assert!(matches!(gear, GameEvent::LootDrop { gear: true, qty: 1, .. }));
-        let stack = GameStateMachine::loot_drop("100300", 3, 1.0, 102);
+        let stack = fsm.loot_drop("100300", 3, 1.0, 102);
         assert!(matches!(stack, GameEvent::LootDrop { gear: false, .. }));
+    }
+
+    #[test]
+    fn gear_from_the_trade_house_is_not_kept_without_a_price() {
+        let mut fsm = GameStateMachine::new(AppSettings::default());
+        fsm.context = EventContext::TradeHouse;
+        let bought = fsm.loot_drop("4533", 1, 0.0, 100);
+        assert!(matches!(bought, GameEvent::LootDrop { gear: false, .. }));
     }
 }
